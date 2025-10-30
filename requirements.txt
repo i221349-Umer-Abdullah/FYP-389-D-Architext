@@ -1,0 +1,32 @@
+# Core dependencies for Architext FYP - Iteration 1
+# AI/ML Libraries
+torch>=2.0.0
+torchvision>=0.15.0
+torchaudio>=2.0.0
+diffusers>=0.21.0
+transformers>=4.30.0
+accelerate>=0.20.0
+
+# 3D Processing
+trimesh>=3.23.0
+numpy>=1.24.0
+scipy>=1.10.0
+open3d>=0.17.0
+pyvista>=0.40.0
+pymeshlab>=2022.2
+
+# Visualization
+matplotlib>=3.7.0
+pillow>=10.0.0
+imageio>=2.31.0
+
+# Web Interface
+gradio>=3.50.0
+
+# Utilities
+pandas>=2.0.0
+tqdm>=4.65.0
+pyyaml>=6.0
+
+# Optional: for better mesh export
+pygltflib>=1.16.0
