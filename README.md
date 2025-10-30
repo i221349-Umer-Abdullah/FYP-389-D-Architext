@@ -9,6 +9,17 @@ Generate 3D house models from text descriptions using AI, designed for integrati
 - **Jalal Sherazi** (22i-8755) - Revit Plugin Development
 - **Arfeen Awan** (22i-2645) - Data Pipeline & Preprocessing
 
+## Documentation
+
+**Complete documentation is available in [docs/README.md](docs/README.md)**
+
+Quick links:
+- [Iteration 1 Deliverables](docs/iteration1/ITERATION_1_DELIVERABLES_COMPLETE.md) - Complete iteration 1 documentation
+- [Quick Reference](docs/iteration1/ITERATION_1_QUICK_REFERENCE.md) - Quick demo reference
+- [Baseline Testing Results](docs/iteration1/BASELINE_TESTING_RESULTS.md) - Comprehensive testing results
+- [Literature Review](docs/iteration1/LITERATURE_REVIEW.md) - Research and model analysis
+- [Deployment Guide](docs/guides/DEPLOYMENT.md) - Deployment instructions
+
 ## Quick Start
 
 ### 1. Setup (First Time Only)
@@ -213,10 +224,11 @@ python tests/model_comparison.py
 python app/demo_app.py
 ```
 
-## Documentation
+## Additional Resources
 
-- **Development History:** `docs/development_history.md`
-- **Week 1 Plan:** `docs/iteration-1-week-plan.md`
+- **Documentation Index:** [docs/README.md](docs/README.md)
+- **Preprocessing Pipeline:** [docs/iteration1/PREPROCESSING_PIPELINE.md](docs/iteration1/PREPROCESSING_PIPELINE.md)
+- **Point-E Testing Guide:** [docs/guides/HOW_TO_TEST_POINT_E.md](docs/guides/HOW_TO_TEST_POINT_E.md)
 - **API Documentation:** See docstrings in `app/core_generator.py`
 
 ## Known Limitations
