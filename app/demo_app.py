@@ -552,10 +552,12 @@ class ArchitextDemo:
             # Architext: AI Text-to-House Generation
             ### *Transform Your Words Into 3D Architecture*
 
-            **FYP Iteration 1 Demo** | Team: Umer Abdullah, Jalal Sherazi, Arfeen Awan
+            **FYP Iteration 1 - Production Demo** | Team: Umer Abdullah (22i-1349), Jalal Sherazi (22i-8755), Arfeen Awan (22i-2645)
 
-            Welcome to Architext - where imagination meets innovation. Describe your dream house in natural language,
-            and watch as AI brings it to life in stunning 3D.
+            This demo uses **Shap-E** - our selected model after comprehensive evaluation of 5 AI models.
+            Shap-E provides the best balance of quality, speed, and reliability for architectural generation.
+
+            *Other models available for separate testing if requested by panel.*
             """)
 
             gr.Markdown("---")
@@ -576,11 +578,13 @@ class ArchitextDemo:
                     with gr.Group():
                         gr.Markdown("#### Generation Settings")
 
-                        model_choice = gr.Radio(
-                            choices=["Shap-E", "Point-E"],
+                        # Model is now fixed to Shap-E (best performer)
+                        # Panel can see other models via standalone test scripts
+                        model_choice = gr.Textbox(
                             value="Shap-E",
                             label="AI Model",
-                            info="Shap-E recommended for higher quality meshes"
+                            interactive=False,
+                            info="Using Shap-E - Best quality and reliability (other models available for testing separately)"
                         )
 
                         quality = gr.Radio(

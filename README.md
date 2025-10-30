@@ -11,14 +11,16 @@ Generate 3D house models from text descriptions using AI, designed for integrati
 
 ## Documentation
 
-**Complete documentation is available in [docs/README.md](docs/README.md)**
+**Main Docs:**
+- [Setup Guide](docs/SETUP.md) - Installation and configuration
+- [Presentation Context](docs/PRESENTATION_CONTEXT.md) - For panel presentation
+- [Model Comparison](docs/MODEL_COMPARISON.md) - Model evaluation results
 
-Quick links:
-- [Iteration 1 Deliverables](docs/iteration1/ITERATION_1_DELIVERABLES_COMPLETE.md) - Complete iteration 1 documentation
-- [Quick Reference](docs/iteration1/ITERATION_1_QUICK_REFERENCE.md) - Quick demo reference
-- [Baseline Testing Results](docs/iteration1/BASELINE_TESTING_RESULTS.md) - Comprehensive testing results
-- [Literature Review](docs/iteration1/LITERATURE_REVIEW.md) - Research and model analysis
-- [Deployment Guide](docs/guides/DEPLOYMENT.md) - Deployment instructions
+**Iteration 1:**
+- [Deliverables](docs/iteration1/ITERATION_1_DELIVERABLES_COMPLETE.md)
+- [Quick Reference](docs/iteration1/ITERATION_1_QUICK_REFERENCE.md)
+- [Testing Results](docs/iteration1/BASELINE_TESTING_RESULTS.md)
+- [Literature Review](docs/iteration1/LITERATURE_REVIEW.md)
 
 ## Quick Start
 

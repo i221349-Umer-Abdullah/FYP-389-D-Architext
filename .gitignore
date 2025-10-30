@@ -88,3 +88,4 @@ Desktop.ini
 # Docker
 .dockerignore
 docker-compose.override.yml
+point_e_model_cache/
