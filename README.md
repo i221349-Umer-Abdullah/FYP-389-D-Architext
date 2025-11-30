@@ -252,7 +252,7 @@ python app/demo_app.py
 ## Contributing
 
 This is an academic FYP project. For questions or collaboration:
-- **Umer Abdullah:** 22i-1349@khi.iba.edu.pk
+- **Umer Abdullah:** i221349@nu.edu.pk
 
 ## License
 
