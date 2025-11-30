@@ -11,9 +11,9 @@ import torch as th
 
 import io
 import PIL.Image as Image
-import drawSvg as drawsvg
-import cairosvg
-import imageio
+import drawsvg
+# import cairosvg
+# import imageio
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 from pytorch_fid.fid_score import calculate_fid_given_paths
@@ -30,8 +30,9 @@ import webcolors
 import networkx as nx
 from collections import defaultdict
 from shapely.geometry import Polygon
-from shapely.geometry.base import geom_factory
-from shapely.geos import lgeos
+# from shapely.geometry.base import geom_factory
+# from shapely.geos import lgeos
+from shapely.validation import make_valid
 
 # import random
 # th.manual_seed(0)
@@ -137,9 +138,9 @@ def estimate_graph(indx, polys, nodes, G_gt, ID_COLOR, draw_graph, save_svg):
                 p1, p2 = polys[k], polys[l]
                 p1, p2 = Polygon(p1), Polygon(p2)
                 if not p1.is_valid:
-                    p1 = geom_factory(lgeos.GEOSMakeValid(p1._geom))
+                    p1 = make_valid(p1)
                 if not p2.is_valid:
-                    p2 = geom_factory(lgeos.GEOSMakeValid(p2._geom))
+                    p2 = make_valid(p2)
                 iou = p1.intersection(p2).area/ p1.union(p2).area
                 if iou > 0 and iou < 0.2:
                     doors_rooms_map[k].append((l, iou))
@@ -201,9 +202,9 @@ def save_samples(
         sample = sample[-1:]
     for i in tqdm(range(sample.shape[1])):
         resolution = 256
-        images = []
-        images2 = []
-        images3 = []
+        # images = []
+        # images2 = []
+        # images3 = []
         for k in range(sample.shape[0]):
             draw = drawsvg.Drawing(resolution, resolution, displayInline=False)
             draw.append(drawsvg.Rectangle(0,0,resolution,resolution, fill='black'))
@@ -258,25 +259,26 @@ def save_samples(
                 for corner in poly:
                     draw.append(drawsvg.Circle(corner[0], corner[1], 2*(resolution/256), fill=ID_COLOR[room_type], fill_opacity=1.0, stroke='gray', stroke_width=0.25))
                     draw3.append(drawsvg.Circle(corner[0], corner[1], 2*(resolution/256), fill=ID_COLOR[room_type], fill_opacity=1.0, stroke='gray', stroke_width=0.25))
-            images.append(Image.open(io.BytesIO(cairosvg.svg2png(draw.asSvg()))))
-            images2.append(Image.open(io.BytesIO(cairosvg.svg2png(draw2.asSvg()))))
-            images3.append(Image.open(io.BytesIO(cairosvg.svg2png(draw3.asSvg()))))
+            # images.append(Image.open(io.BytesIO(cairosvg.svg2png(draw.asSvg()))))
+            # images2.append(Image.open(io.BytesIO(cairosvg.svg2png(draw2.asSvg()))))
+            # images3.append(Image.open(io.BytesIO(cairosvg.svg2png(draw3.asSvg()))))
             if k==sample.shape[0]-1 or True:
                 if save_edges:
-                    draw.saveSvg(f'outputs/{ext}/{tmp_count+i}_{k}_{ext}.svg')
+                    draw.save_svg(f'outputs/{ext}/{tmp_count+i}_{k}_{ext}.svg')
                 if save_svg:
-                    draw_color.saveSvg(f'outputs/{ext}/{tmp_count+i}c_{k}_{ext}.svg')
+                    draw_color.save_svg(f'outputs/{ext}/{tmp_count+i}c_{k}_{ext}.svg')
                 else:
-                    Image.open(io.BytesIO(cairosvg.svg2png(draw_color.asSvg()))).save(f'outputs/{ext}/{tmp_count+i}c_{ext}.png')
+                    # Image.open(io.BytesIO(cairosvg.svg2png(draw_color.asSvg()))).save(f'outputs/{ext}/{tmp_count+i}c_{ext}.png')
+                    pass
             if k==sample.shape[0]-1:
                 if 'graph' in model_kwargs:
                     graph_errors.append(estimate_graph(tmp_count+i, polys, types, model_kwargs[f'{prefix}graph'][i], ID_COLOR=ID_COLOR, draw_graph=draw_graph, save_svg=save_svg))
                 else:
                     graph_errors.append(0)
-        if save_gif:
-            imageio.mimwrite(f'outputs/gif/{tmp_count+i}.gif', images, fps=10, loop=1)
-            imageio.mimwrite(f'outputs/gif/{tmp_count+i}_v2.gif', images2, fps=10, loop=1)
-            imageio.mimwrite(f'outputs/gif/{tmp_count+i}_v3.gif', images3, fps=10, loop=1)
+        # if save_gif:
+        #     imageio.mimwrite(f'outputs/gif/{tmp_count+i}.gif', images, fps=10, loop=1)
+        #     imageio.mimwrite(f'outputs/gif/{tmp_count+i}_v2.gif', images2, fps=10, loop=1)
+        #     imageio.mimwrite(f'outputs/gif/{tmp_count+i}_v3.gif', images3, fps=10, loop=1)
     return graph_errors
 
 def main():
@@ -365,7 +367,7 @@ def create_argparser():
         batch_size=16,
         use_ddim=False,
         model_path="",
-        draw_graph=True,
+        draw_graph=False,
         save_svg=True,
     )
     defaults.update(model_and_diffusion_defaults())

@@ -4,7 +4,7 @@ import torch as th
 
 from PIL import Image, ImageDraw
 import blobfile as bf
-from mpi4py import MPI
+# from mpi4py import MPI
 import numpy as np
 from torch.utils.data import DataLoader, Dataset
 from glob import glob
@@ -31,11 +31,11 @@ def load_rplanhg_data(
     dataset = RPlanhgDataset(set_name, analog_bit, target_set)
     if deterministic:
         loader = DataLoader(
-            dataset, batch_size=batch_size, shuffle=False, num_workers=2, drop_last=False
+            dataset, batch_size=batch_size, shuffle=False, num_workers=0, drop_last=False
         )
     else:
         loader = DataLoader(
-            dataset, batch_size=batch_size, shuffle=True, num_workers=2, drop_last=False
+            dataset, batch_size=batch_size, shuffle=True, num_workers=0, drop_last=False
         )
     while True:
         yield from loader
@@ -85,7 +85,7 @@ get_one_hot = lambda x, z: np.eye(z)[x]
 class RPlanhgDataset(Dataset):
     def __init__(self, set_name, analog_bit, target_set, non_manhattan=False):
         super().__init__()
-        base_dir = '../datasets/rplan'
+        base_dir = 'datasets/rplan'
         self.non_manhattan = non_manhattan
         self.set_name = set_name
         self.analog_bit = analog_bit
@@ -256,6 +256,7 @@ class RPlanhgDataset(Dataset):
                     num_points = 0
                     num_room_corners_total = [cnumber_dist[room[1]][random.randint(0, len(cnumber_dist[room[1]])-1)] for room in h]
                     while np.sum(num_room_corners_total)>=max_num_points:
+                        print(f"DEBUG: Stuck in loop. sum={np.sum(num_room_corners_total)}, max={max_num_points}")
                         num_room_corners_total = [cnumber_dist[room[1]][random.randint(0, len(cnumber_dist[room[1]])-1)] for room in h]
                     for i, room in enumerate(h):
                         # Adding conditions
@@ -493,6 +494,8 @@ class RPlanhgDataset(Dataset):
         # convert to array
         nodes = np.array(nodes)
         triples = np.array(triples)
+        if len(triples) == 0:
+            triples = np.zeros((0, 3))
         rms_masks = np.array(rms_masks)
         return nodes, triples, rms_masks
 

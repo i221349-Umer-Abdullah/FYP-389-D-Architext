@@ -515,7 +515,7 @@ class GaussianDiffusion:
             progress=progress,
             analog_bit=analog_bit,
         ))):
-            if i>970:
+            if i > self.num_timesteps - 30:
                 myfinal.append(sample['sample'])
             final = sample
         return th.stack(myfinal)
@@ -692,7 +692,7 @@ class GaussianDiffusion:
             progress=progress,
             eta=eta,
         ))):
-            if i>990:
+            if i > self.num_timesteps - 10:
                 myfinal.append(sample['sample'])
             final = sample
         return th.stack(myfinal)
