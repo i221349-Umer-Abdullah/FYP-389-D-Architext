@@ -1,270 +1,61 @@
-# Architext - AI Text-to-3D House Generator
+# HouseDiffusion
+**[HouseDiffusion: Vector Floorplan Generation via a Diffusion Model with Discrete and Continuous Denoising](https://arxiv.org/abs/2211.13287)**
+<img src='figs/teaser.png' width=100%>
+## Installation
+**1. Clone our repo and install the requirements:**
 
-**Final Year Project - Iteration 1**
-
-Generate 3D house models from text descriptions using AI, designed for integration with BIM software like Autodesk Revit.
-
-## Team
-- **Umer Abdullah** (22i-1349) - AI/ML Module Lead
-- **Jalal Sherazi** (22i-8755) - Revit Plugin Development
-- **Arfeen Awan** (22i-2645) - Data Pipeline & Preprocessing
-
-## Documentation
-
-**Main Docs:**
-- [Setup Guide](docs/SETUP.md) - Installation and configuration
-- [Presentation Context](docs/PRESENTATION_CONTEXT.md) - For panel presentation
-- [Model Comparison](docs/MODEL_COMPARISON.md) - Model evaluation results
-
-**Iteration 1:**
-- [Deliverables](docs/iteration1/ITERATION_1_DELIVERABLES_COMPLETE.md)
-- [Quick Reference](docs/iteration1/ITERATION_1_QUICK_REFERENCE.md)
-- [Testing Results](docs/iteration1/BASELINE_TESTING_RESULTS.md)
-- [Literature Review](docs/iteration1/LITERATURE_REVIEW.md)
-
-## Quick Start
-
-### 1. Setup (First Time Only)
-
-**Windows:**
-```batch
-setup.bat
-```
-
-This will:
-- Create Python virtual environment
-- Install PyTorch (with CUDA if available)
-- Install all dependencies
-- Create necessary directories
-
-**Time:** 5-10 minutes (depending on internet speed)
-
-### 2. Test Models
-
-**Test Shap-E (recommended):**
-```batch
-test_shap_e.bat
-```
-
-**Test Point-E (alternative):**
-```batch
-test_point_e.bat
-```
-
-**Compare all models:**
-```batch
-compare_models.bat
-```
-
-**Time:** 5-15 minutes per model
-
-### 3. Launch Demo
-
-```batch
-run_demo.bat
-```
-
-Opens a web interface at `http://localhost:7860`
-
-## Project Structure
+Our implementation is based on the public implementation of [guided-diffusion](https://github.com/openai/guided-diffusion). For installation instructions, please refer to their repository. Keep in mind that our current version has not been cleaned and some features from the original repository may not function correctly.
 
 ```
-architext/
-├── app/
-│   ├── core_generator.py    # Main generation logic
-│   └── demo_app.py          # Gradio web interface
-├── tests/
-│   ├── test_shap_e.py       # Shap-E model tests
-│   ├── test_point_e.py      # Point-E model tests
-│   └── model_comparison.py  # Automated comparison
-├── outputs/                 # Generated 3D models
-├── models/                  # Cached AI models
-├── docs/
-│   └── development_history.md
-├── requirements.txt
-└── setup.bat               # Setup script
-
-```
-
-## Features
-
-### Current (Iteration 1)
-- ✅ Text-to-3D house generation
-- ✅ Multiple AI models (Shap-E, Point-E)
-- ✅ Interactive web UI
-- ✅ Multiple export formats (OBJ, PLY, STL)
-- ✅ Automatic mesh scaling and post-processing
-- ✅ Metadata tracking
-- ✅ Model comparison framework
-
-### Planned (Future Iterations)
-- Revit plugin integration
-- Custom model training on architectural dataset
-- Room specification parsing
-- Structural analysis
-- Cost estimation
-- Floor plan to 3D conversion
-
-## Usage Examples
-
-### Using the Demo UI
-
-1. Launch: `run_demo.bat`
-2. Enter a description: *"A modern two-story house with large windows"*
-3. Select quality: Medium (recommended for testing)
-4. Click "Generate House"
-5. Download the OBJ file
-6. Open in Blender/Revit
-
-### Using Python API
-
-```python
-from app.core_generator import HouseGenerator
-
-# Initialize generator
-generator = HouseGenerator(model_name="shap-e")
-
-# Generate house
-mesh, spec = generator.generate_house(
-    "a modern two-story house with garage",
-    num_steps=64
-)
-
-# Export
-generator.export_mesh(mesh, "my_house", format="obj")
-```
-
-## Supported Models
-
-### Shap-E (Recommended)
-- **Source:** OpenAI
-- **Output:** 3D meshes
-- **Quality:** High
-- **Speed:** Medium (1-2 min)
-- **Best for:** Detailed house models
-
-### Point-E (Alternative)
-- **Source:** OpenAI
-- **Output:** Point clouds → Meshes
-- **Quality:** Medium
-- **Speed:** Fast (30-60 sec)
-- **Best for:** Quick prototyping
-
-## Export Formats
-
-- **OBJ** - Universal 3D format (Blender, Maya, Revit)
-- **PLY** - Preserves vertex colors
-- **STL** - For 3D printing
-- **JSON** - Metadata and specifications
-
-## System Requirements
-
-### Minimum
-- Windows 10/11
-- Python 3.8+
-- 8GB RAM
-- 5GB disk space
-
-### Recommended
-- NVIDIA GPU (CUDA-capable)
-- 16GB RAM
-- 10GB disk space
-- Good internet (for first-time model download)
-
-## Troubleshooting
-
-### Setup fails
-- Ensure Python 3.8+ is installed: `python --version`
-- Run as administrator if permission errors occur
-
-### Model download slow
-- Models are ~2-3GB, first download takes time
-- Models are cached in `models/` directory
-
-### Generation fails
-- Check if virtual environment is activated
-- Verify GPU drivers if using CUDA
-- Try "Low" quality setting first
-
-### Out of memory
-- Reduce quality setting to "Low"
-- Close other applications
-- Use CPU instead of GPU (slower but works)
-
-## Development
-
-### Manual Setup (Advanced)
-
-```bash
-# Create environment
-python -m venv venv
-venv\Scripts\activate
-
-# Install PyTorch (CUDA)
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
-
-# Install other dependencies
+git clone https://github.com/aminshabani/house_diffusion.git
+cd house_diffusion
 pip install -r requirements.txt
+pip install -e .
 ```
+**2. Download the dataset and create the datasets directory**
 
-### Running Tests
+- You can download the datasets from [RPLAN's website](http://staff.ustc.edu.cn/~fuxm/projects/DeepLayout/index.html) or by filling [this](https://docs.google.com/forms/d/e/1FAIpQLSfwteilXzURRKDI5QopWCyOGkeb_CFFbRwtQ0SOPhEg0KGSfw/viewform) form.
+- We also use data preprocessing from House-GAN++ which you can find in [this](https://github.com/sepidsh/Housegan-data-reader) link.
+Put all of the processed files from the downloaded dataset in a `datasets` folder in the current directory:
 
-```bash
-# Activate environment
-venv\Scripts\activate
-
-# Test Shap-E
-python tests/test_shap_e.py
-
-# Test Point-E
-python tests/test_point_e.py
-
-# Compare models
-python tests/model_comparison.py
-
-# Launch demo
-python app/demo_app.py
 ```
+house_diffusion
+├── datasets
+│   ├── rplan
+|   |   └── 0.json
+|   |   └── 1.json
+|   |   └── ...
+|   └── ...
+└── guided_diffusion
+└── scripts
+└── ...
+```
+- We have provided a temporary model that you can download from [Google Drive](https://drive.google.com/file/d/16zKmtxwY5lF6JE-CJGkRf3-OFoD1TrdR/view?usp=share_link). 
 
-## Additional Resources
+## Running the code
 
-- **Documentation Index:** [docs/README.md](docs/README.md)
-- **Preprocessing Pipeline:** [docs/iteration1/PREPROCESSING_PIPELINE.md](docs/iteration1/PREPROCESSING_PIPELINE.md)
-- **Point-E Testing Guide:** [docs/guides/HOW_TO_TEST_POINT_E.md](docs/guides/HOW_TO_TEST_POINT_E.md)
-- **API Documentation:** See docstrings in `app/core_generator.py`
+**1. Training**
 
-## Known Limitations
+You can run a single experiment using the following command:
+```
+python image_train.py --dataset rplan --batch_size 32 --set_name train --target_set 8
+```
+**2. Sampling**
+To sample floorplans, you can run the following command from inside of the `scripts` directory. To provide different visualizations, please see the `save_samples` function from `scripts/image_sample.py`
 
-1. **Generation Quality:** Pre-trained models may not produce perfect houses
-2. **Architectural Details:** Fine details (windows, doors) may be abstract
-3. **Revit Integration:** Not yet implemented (coming in Iteration 2)
-4. **Training:** Using pre-trained models, not custom-trained on houses
-5. **Speed:** High-quality generation can take 2+ minutes
+```
+python image_sample.py --dataset rplan --batch_size 32 --set_name eval --target_set 8 --model_path ckpts/exp/model250000.pt --num_samples 64
+```
+You can also run the corresponding code from `scripts/script.sh`. 
 
-## Next Steps
 
-1. **Test models** with various prompts
-2. **Evaluate quality** of generated houses
-3. **Select best model** for demo
-4. **Prepare examples** for presentation
-5. **Refine UI** based on testing
+## Citation
 
-## Contributing
-
-This is an academic FYP project. For questions or collaboration:
-- **Umer Abdullah:** 22i-1349@khi.iba.edu.pk
-
-## License
-
-Academic project for educational purposes.
-
-## Acknowledgments
-
-- OpenAI for Shap-E and Point-E models
-- Hugging Face for Diffusers library
-- Gradio for easy UI development
-
----
-
-**Last Updated:** 2024-10-30
-**Version:** 1.0.0 (Iteration 1)
+```
+@article{shabani2022housediffusion,
+  title={HouseDiffusion: Vector Floorplan Generation via a Diffusion Model with Discrete and Continuous Denoising},
+  author={Shabani, Mohammad Amin and Hosseini, Sepidehsadat and Furukawa, Yasutaka},
+  journal={arXiv preprint arXiv:2211.13287},
+  year={2022}
+}
+```
