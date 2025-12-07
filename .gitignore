@@ -5,6 +5,10 @@ __pycache__/
 ckpts/
 datasets/
 outputs/
+output/
 processed_rplan/
+models/
 *.npz
 *.pt
+*.ifc
+.vscode/
