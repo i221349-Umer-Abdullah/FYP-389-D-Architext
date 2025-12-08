@@ -6,10 +6,12 @@ Converts JSON building specifications to IFC files.
 import json
 import datetime
 import uuid
+import math
 from pathlib import Path
 import ifcopenshell
 import ifcopenshell.api
 import ifcopenshell.geom
+from layout_optimizer_rules import RuleBasedLayoutOptimizer
 
 
 class BIMGenerator:
@@ -23,6 +25,7 @@ class BIMGenerator:
         self.building = None
         self.storey = None
         self.owner_history = None
+        self.geom_context = None  # Geometric representation context
     
     def create_project_structure(self, project_name: str = "AI Generated Building"):
         """
@@ -110,7 +113,26 @@ class BIMGenerator:
             self.building,
             [self.storey]
         )
-    
+
+        # Create geometric representation context
+        context_dim = 3
+        precision = 1.0e-5
+        self.geom_context = self.ifc.createIfcGeometricRepresentationContext(
+            None,
+            "Model",
+            context_dim,
+            precision,
+            self.create_axis2placement_3d([0., 0., 0.]),
+            None
+        )
+
+        # Create storey placement
+        storey_placement = self.create_axis2placement_3d([0., 0., 0.])
+        self.storey.ObjectPlacement = self.ifc.createIfcLocalPlacement(
+            None,
+            storey_placement
+        )
+
     def create_simple_room(self, name: str, length: float, width: float, height: float = 2.7,
                           x_offset: float = 0.0, y_offset: float = 0.0):
         """
@@ -195,13 +217,221 @@ class BIMGenerator:
             [wall],
             self.storey
         )
-        
-        # Note: Full geometric representation would require creating
-        # IfcExtrudedAreaSolid and other geometric entities.
-        # For MVP, we're creating the IFC structure without detailed geometry.
-        
+
+        # Calculate wall geometry
+        geom = self.calculate_wall_geometry(x1, y1, x2, y2, thickness)
+
+        # Create wall profile (rectangular cross-section)
+        profile = self.create_rectangle_profile(
+            thickness,
+            geom["length"],
+            f"{name}_Profile"
+        )
+
+        # Create extrusion placement
+        extrusion_position = self.create_axis2placement_3d(
+            [x1, y1, 0.],
+            [0., 0., 1.],
+            geom["x_direction"]
+        )
+
+        # Create extruded solid (extrude vertically)
+        extruded_solid = self.create_extruded_solid(
+            profile,
+            extrusion_position,
+            [0., 0., 1.],
+            height
+        )
+
+        # Create shape representation
+        shape_rep = self.create_shape_representation([extruded_solid])
+
+        # Create product definition shape
+        product_shape = self.ifc.createIfcProductDefinitionShape(
+            None,
+            None,
+            [shape_rep]
+        )
+
+        # Assign shape to wall
+        wall.Representation = product_shape
+
+        # Create wall placement
+        wall_placement = self.create_axis2placement_3d(
+            geom["center"],
+            [0., 0., 1.],
+            geom["x_direction"]
+        )
+        wall.ObjectPlacement = self.create_local_placement(
+            wall_placement,
+            self.storey.ObjectPlacement
+        )
+
         return wall
-    
+
+    def get_geometric_context(self):
+        """
+        Get or create the geometric representation context.
+
+        Returns:
+            IfcGeometricRepresentationContext
+        """
+        if self.geom_context is None:
+            raise RuntimeError(
+                "Geometric context not initialized. "
+                "Call create_project_structure() first."
+            )
+        return self.geom_context
+
+    def create_axis2placement_3d(self, location, axis=None, ref_direction=None):
+        """
+        Create a 3D coordinate system (IfcAxis2Placement3D).
+
+        Args:
+            location: [x, y, z] coordinates
+            axis: [x, y, z] Z-axis direction (default [0, 0, 1])
+            ref_direction: [x, y, z] X-axis direction (default [1, 0, 0])
+
+        Returns:
+            IfcAxis2Placement3D
+        """
+        point = self.ifc.createIfcCartesianPoint([float(x) for x in location])
+        axis_default = [0., 0., 1.]
+        ref_default = [1., 0., 0.]
+        z_axis = self.ifc.createIfcDirection([float(x) for x in (axis or axis_default)])
+        x_axis = self.ifc.createIfcDirection([float(x) for x in (ref_direction or ref_default)])
+        return self.ifc.createIfcAxis2Placement3D(point, z_axis, x_axis)
+
+    def create_axis2placement_2d(self, location, ref_direction=None):
+        """
+        Create a 2D coordinate system (IfcAxis2Placement2D).
+
+        Args:
+            location: [x, y] coordinates
+            ref_direction: [x, y] X-axis direction (default [1, 0])
+
+        Returns:
+            IfcAxis2Placement2D
+        """
+        point = self.ifc.createIfcCartesianPoint([float(x) for x in location])
+        if ref_direction:
+            direction = self.ifc.createIfcDirection([float(x) for x in ref_direction])
+            return self.ifc.createIfcAxis2Placement2D(point, direction)
+        else:
+            return self.ifc.createIfcAxis2Placement2D(point)
+
+    def create_rectangle_profile(self, width, height, name="RectangleProfile"):
+        """
+        Create a rectangular profile for extrusion.
+
+        Args:
+            width: Profile width (X dimension)
+            height: Profile height (Y dimension)
+            name: Profile name
+
+        Returns:
+            IfcRectangleProfileDef
+        """
+        position = self.create_axis2placement_2d([0., 0.])
+        return self.ifc.createIfcRectangleProfileDef(
+            "AREA",
+            name,
+            position,
+            width,
+            height
+        )
+
+    def create_extruded_solid(self, profile, position, direction, depth):
+        """
+        Create a 3D solid by extruding a profile.
+
+        Args:
+            profile: IfcProfileDef to extrude
+            position: IfcAxis2Placement3D for extrusion origin
+            direction: [x, y, z] extrusion direction
+            depth: Extrusion depth
+
+        Returns:
+            IfcExtrudedAreaSolid
+        """
+        dir_vec = self.ifc.createIfcDirection([float(x) for x in direction])
+        return self.ifc.createIfcExtrudedAreaSolid(profile, position, dir_vec, depth)
+
+    def create_shape_representation(self, items, representation_type="SweptSolid"):
+        """
+        Create a shape representation containing geometric items.
+
+        Args:
+            items: List of geometric items (e.g., IfcExtrudedAreaSolid)
+            representation_type: Type of representation (default "SweptSolid")
+
+        Returns:
+            IfcShapeRepresentation
+        """
+        context = self.get_geometric_context()
+        return self.ifc.createIfcShapeRepresentation(
+            context,
+            "Body",
+            representation_type,
+            items
+        )
+
+    def create_local_placement(self, relative_placement, placement_rel_to=None):
+        """
+        Create a local placement for positioning elements.
+
+        Args:
+            relative_placement: IfcAxis2Placement3D for position/orientation
+            placement_rel_to: Parent placement (default: storey placement)
+
+        Returns:
+            IfcLocalPlacement
+        """
+        if placement_rel_to is None:
+            placement_rel_to = self.storey.ObjectPlacement
+        return self.ifc.createIfcLocalPlacement(
+            placement_rel_to,
+            relative_placement
+        )
+
+    def calculate_wall_geometry(self, x1, y1, x2, y2, thickness):
+        """
+        Calculate wall geometry parameters.
+
+        Args:
+            x1, y1: Start point coordinates
+            x2, y2: End point coordinates
+            thickness: Wall thickness
+
+        Returns:
+            Dictionary with length, angle, center, x_direction, y_direction
+        """
+        dx = x2 - x1
+        dy = y2 - y1
+        length = math.sqrt(dx**2 + dy**2)
+
+        # Avoid division by zero
+        if length < 1e-6:
+            length = 1e-6
+
+        # Calculate direction vectors
+        x_direction = [dx / length, dy / length, 0.0]
+        y_direction = [-dy / length, dx / length, 0.0]
+
+        # Calculate center point
+        center = [(x1 + x2) / 2.0, (y1 + y2) / 2.0, 0.0]
+
+        # Calculate angle
+        angle = math.atan2(dy, dx)
+
+        return {
+            "length": length,
+            "angle": angle,
+            "center": center,
+            "x_direction": x_direction,
+            "y_direction": y_direction
+        }
+
     def generate_from_spec(self, spec: dict, output_path: str = None) -> str:
         """
         Generate IFC file from JSON specification.
@@ -235,68 +465,23 @@ class BIMGenerator:
         has_dining_room = metadata.get("dining_room", False) or any(r.get("type") == "dining_room" for r in rooms_list)
         has_study = metadata.get("study", False) or any(r.get("type") == "study" for r in rooms_list)
         
-        # Simple room dimensions (can be improved with Layout Optimizer later)
-        bedroom_size = (3.5, 3.0)  # 3.5m x 3m
-        bathroom_size = (2.0, 2.5)  # 2m x 2.5m
-        kitchen_size = (3.0, 4.0)   # 3m x 4m
-        living_size = (5.0, 4.5)    # 5m x 4.5m
-        dining_size = (3.5, 3.5)    # 3.5m x 3.5m
-        study_size = (2.5, 3.0)     # 2.5m x 3m
-        
-        # Simple layout - arrange rooms in a grid
-        x, y = 0.0, 0.0
-        
-        # Create bedrooms
-        for i in range(num_bedrooms):
+        # Use rule-based layout optimizer for intelligent room placement
+        print("Optimizing room layout...")
+        optimizer = RuleBasedLayoutOptimizer()
+        rooms = optimizer.optimize_layout(metadata)
+
+        print(f"Generated layout with {len(rooms)} rooms")
+
+        # Create rooms with optimized positions
+        for room in rooms:
             self.create_simple_room(
-                f"Bedroom {i+1}",
-                bedroom_size[0],
-                bedroom_size[1],
-                x_offset=x,
-                y_offset=y
+                room.name,
+                room.width,
+                room.height,
+                x_offset=room.x,
+                y_offset=room.y
             )
-            x += bedroom_size[0] + 0.2  # Add spacing
-        
-        # Reset to next row
-        x = 0.0
-        y += bedroom_size[1] + 0.2
-        
-        # Create bathrooms
-        for i in range(num_bathrooms):
-            self.create_simple_room(
-                f"Bathroom {i+1}",
-                bathroom_size[0],
-                bathroom_size[1],
-                x_offset=x,
-                y_offset=y
-            )
-            x += bathroom_size[0] + 0.2
-        
-        # Create living room
-        if has_living_room:
-            x = 0.0
-            y += bathroom_size[1] + 0.2
-            self.create_simple_room(
-                "Living Room",
-                living_size[0],
-                living_size[1],
-                x_offset=x,
-                y_offset=y
-            )
-            x += living_size[0] + 0.2
-        
-        # Create kitchen
-        if has_kitchen:
-            if not has_living_room:
-                x = 0.0
-                y += bathroom_size[1] + 0.2
-            self.create_simple_room(
-                "Kitchen",
-                kitchen_size[0],
-                kitchen_size[1],
-                x_offset=x,
-                y_offset=y
-            )
+            print(f"  Created {room.name}: {room.width}x{room.height}m at ({room.x:.1f}, {room.y:.1f})")
         
         # Save IFC file
         if output_path is None:
