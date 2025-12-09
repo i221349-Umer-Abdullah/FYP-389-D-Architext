@@ -1,18 +1,59 @@
 """
-Rule-Based Layout Optimizer for Room Placement
-Uses heuristics and architectural best practices.
-Can be upgraded to ML-based optimizer later.
+=============================================================================
+ArchiText: Rule-Based Layout Optimization Engine
+=============================================================================
+
+This module implements the rule-based layout optimization layer that enhances
+the output from the trained NLP model. It applies architectural constraints
+and best practices to generate realistic, buildable floor plans.
+
+Role in the Pipeline:
+---------------------
+This optimizer acts as LAYER 2 in the ArchiText pipeline:
+
+    LAYER 1 (NLP Model) → Raw specification → LAYER 2 (This Optimizer) →
+    Refined layout → LAYER 3 (IFC Generator) → BIM File
+
+The optimizer takes the JSON specification from the trained model and:
+    1. Assigns appropriate dimensions to each room type
+    2. Places rooms according to architectural adjacency rules
+    3. Ensures proper connectivity between spaces
+    4. Validates the layout for buildability
+
+Architectural Rules Applied:
+----------------------------
+    - Room Sizing: Standard dimensions for 30+ room types
+    - Adjacency: Kitchen near dining, en-suite connected to master bedroom
+    - Zoning: Public areas (living, dining) separate from private (bedrooms)
+    - Circulation: Hallways connect private rooms to public areas
+    - Overlap Prevention: Rooms maintain proper separation
+
+Room Types Supported:
+---------------------
+    - Bedrooms: master, guest, kids, standard (3-4.5m range)
+    - Bathrooms: full, en-suite, powder room (1.5-2.5m range)
+    - Living Spaces: living room, lounge, family room (4-5.5m range)
+    - Kitchen: standard, kitchen-dining combo, pantry
+    - Utility: laundry, utility room, garage
+    - Circulation: hallway, foyer, corridor
+
+Example Usage:
+--------------
+    >>> optimizer = RuleBasedLayoutOptimizer()
+    >>> spec = {"bedrooms": 3, "bathrooms": 2, "kitchen": True, "living_room": True}
+    >>> rooms = optimizer.optimize_layout(spec)
+    >>> for room in rooms:
+    ...     print(f"{room.name}: {room.width}x{room.height}m at ({room.x}, {room.y})")
+
+Author: ArchiText Team
+Version: 1.0.0
+=============================================================================
 """
 
 import sys
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 import math
-
-if sys.platform == 'win32':
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-
 
 @dataclass
 class Room:
@@ -49,40 +90,158 @@ class RuleBasedLayoutOptimizer:
     """
 
     # Standard room dimensions (width, height in meters)
+    # Based on architectural standards and typical usage patterns
     ROOM_DIMENSIONS = {
-        "bedroom": (3.5, 3.0),
-        "master_bedroom": (4.0, 3.5),
-        "bathroom": (2.0, 2.5),
-        "kitchen": (3.0, 4.0),
-        "living_room": (5.0, 4.5),
-        "dining_room": (3.5, 3.0),
-        "study": (2.5, 3.0),
-        "hallway": (1.5, 3.0),
-        "storage": (2.0, 2.0),
+        # Bedrooms
+        "bedroom": (3.5, 3.5),             # Standard bedroom: ~12 sqm
+        "master_bedroom": (4.5, 4.0),      # Master bedroom: ~18 sqm
+        "guest_bedroom": (3.5, 3.0),       # Guest room: ~10.5 sqm
+        "kids_bedroom": (3.0, 3.0),        # Kids room: ~9 sqm
+
+        # Bathrooms
+        "bathroom": (2.5, 2.0),            # Standard bath: ~5 sqm
+        "en_suite": (2.5, 2.5),            # En-suite bathroom: ~6.25 sqm
+        "powder_room": (1.5, 2.0),         # Half bath/powder room: ~3 sqm
+
+        # Living spaces
+        "living_room": (5.5, 4.5),         # Living room: ~25 sqm
+        "lounge": (5.0, 4.0),              # Lounge/sitting room: ~20 sqm
+        "drawing_room": (4.5, 4.0),        # Drawing room: ~18 sqm
+        "family_room": (5.0, 4.5),         # Family room: ~22.5 sqm
+        "sun_room": (4.0, 3.5),            # Sun room/conservatory: ~14 sqm
+
+        # Dining & Kitchen
+        "kitchen": (4.0, 3.5),             # Kitchen: ~14 sqm
+        "dining_room": (4.0, 3.5),         # Dining room: ~14 sqm
+        "kitchen_dining": (6.0, 4.0),      # Combined kitchen/dining: ~24 sqm
+        "pantry": (2.0, 2.0),              # Pantry: ~4 sqm
+
+        # Work & Utility
+        "study": (3.0, 3.0),               # Study/home office: ~9 sqm
+        "home_office": (3.5, 3.5),         # Larger home office: ~12 sqm
+        "library": (4.0, 3.5),             # Library/reading room: ~14 sqm
+        "laundry": (2.5, 2.0),             # Laundry room: ~5 sqm
+        "utility": (2.5, 2.5),             # Utility room: ~6.25 sqm
+
+        # Circulation & Storage
+        "hallway": (1.5, 3.5),             # Hallway: ~5 sqm
+        "corridor": (1.2, 4.0),            # Corridor: ~5 sqm
+        "foyer": (3.0, 2.5),               # Entrance foyer: ~7.5 sqm
+        "storage": (2.0, 2.0),             # Storage room: ~4 sqm
+        "walk_in_closet": (2.5, 2.5),      # Walk-in closet: ~6.25 sqm
+
+        # Special rooms
+        "garage": (6.0, 3.0),              # Single car garage: ~18 sqm
+        "double_garage": (6.0, 6.0),       # Double garage: ~36 sqm
+        "basement": (8.0, 6.0),            # Basement: ~48 sqm
+        "attic": (6.0, 4.0),               # Attic space: ~24 sqm
+        "gym": (4.0, 4.0),                 # Home gym: ~16 sqm
+        "media_room": (5.0, 4.0),          # Media/theater room: ~20 sqm
+        "pool_room": (5.0, 4.0),           # Pool/billiards room: ~20 sqm
     }
 
     # Room adjacency preferences (which rooms should be near each other)
     ADJACENCY_PREFERENCES = {
-        "kitchen": ["dining_room", "living_room"],
-        "living_room": ["kitchen", "dining_room", "hallway"],
+        # Kitchen connections
+        "kitchen": ["dining_room", "living_room", "pantry", "utility"],
+        "kitchen_dining": ["living_room", "pantry"],
+        "pantry": ["kitchen"],
+
+        # Living spaces
+        "living_room": ["kitchen", "dining_room", "hallway", "foyer", "sun_room"],
+        "lounge": ["living_room", "dining_room", "hallway"],
+        "drawing_room": ["foyer", "living_room", "hallway"],
+        "family_room": ["kitchen", "living_room"],
+        "sun_room": ["living_room", "dining_room"],
         "dining_room": ["kitchen", "living_room"],
-        "master_bedroom": ["bathroom"],
+
+        # Bedrooms
+        "master_bedroom": ["en_suite", "walk_in_closet", "bathroom"],
         "bedroom": ["bathroom", "hallway"],
-        "bathroom": ["bedroom", "hallway"],
-        "study": ["living_room", "hallway"],
+        "guest_bedroom": ["bathroom", "hallway"],
+        "kids_bedroom": ["bathroom", "hallway"],
+
+        # Bathrooms
+        "bathroom": ["bedroom", "hallway", "master_bedroom"],
+        "en_suite": ["master_bedroom"],
+        "powder_room": ["foyer", "hallway"],
+
+        # Work spaces
+        "study": ["living_room", "hallway", "library"],
+        "home_office": ["study", "library", "hallway"],
+        "library": ["study", "living_room"],
+
+        # Utility
+        "laundry": ["kitchen", "utility", "garage"],
+        "utility": ["kitchen", "laundry", "garage"],
+
+        # Circulation
+        "hallway": ["living_room", "bedroom", "bathroom", "foyer"],
+        "corridor": ["bedroom", "bathroom"],
+        "foyer": ["living_room", "hallway", "drawing_room"],
+
+        # Storage
+        "storage": ["hallway", "utility"],
+        "walk_in_closet": ["master_bedroom"],
+
+        # Special rooms
+        "garage": ["utility", "laundry", "foyer"],
+        "gym": ["bathroom", "utility"],
+        "media_room": ["living_room", "family_room"],
+        "pool_room": ["living_room", "family_room"],
     }
 
     # Placement priorities (higher = place first)
+    # Higher priority rooms are placed first and become anchors for others
     PLACEMENT_PRIORITY = {
-        "living_room": 10,
-        "kitchen": 9,
-        "master_bedroom": 8,
-        "bedroom": 7,
-        "bathroom": 6,
-        "dining_room": 5,
-        "study": 4,
+        # Main living spaces (place first as central anchors)
+        "living_room": 20,
+        "family_room": 19,
+        "lounge": 18,
+        "drawing_room": 17,
+
+        # Kitchen area (near living spaces)
+        "kitchen": 16,
+        "kitchen_dining": 16,
+        "dining_room": 15,
+        "pantry": 10,
+
+        # Primary bedroom suite
+        "master_bedroom": 14,
+        "en_suite": 13,
+        "walk_in_closet": 12,
+
+        # Other bedrooms
+        "bedroom": 11,
+        "guest_bedroom": 10,
+        "kids_bedroom": 9,
+
+        # Bathrooms
+        "bathroom": 8,
+        "powder_room": 7,
+
+        # Work spaces
+        "study": 6,
+        "home_office": 6,
+        "library": 5,
+
+        # Utility rooms
+        "laundry": 4,
+        "utility": 4,
+
+        # Circulation
+        "foyer": 3,
         "hallway": 3,
-        "storage": 2,
+        "corridor": 2,
+
+        # Storage and special
+        "storage": 1,
+        "garage": 1,
+        "double_garage": 1,
+        "gym": 1,
+        "media_room": 1,
+        "pool_room": 1,
+        "sun_room": 1,
     }
 
     def __init__(self):
@@ -328,6 +487,18 @@ class RuleBasedLayoutOptimizer:
         max_y = max(r.y + r.height for r in self.rooms)
 
         return (min_x, min_y, max_x, max_y)
+
+    def _count_overlaps(self, rooms: List[Room] = None) -> int:
+        """Count the number of overlapping room pairs."""
+        if rooms is None:
+            rooms = self.rooms
+
+        overlaps = 0
+        for i, r1 in enumerate(rooms):
+            for r2 in rooms[i+1:]:
+                if r1.overlaps(r2, margin=0.0):  # No margin for counting
+                    overlaps += 1
+        return overlaps
 
 
 def main():

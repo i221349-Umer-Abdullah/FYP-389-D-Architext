@@ -1,6 +1,74 @@
 """
-NLP Model Training Script
-Fine-tune T5 for text-to-spec conversion
+=============================================================================
+ArchiText: NLP Model Training Script
+=============================================================================
+
+This script trains the T5 transformer model (LAYER 1) for converting natural
+language building descriptions into structured JSON specifications. The trained
+model serves as the foundation of the ArchiText pipeline.
+
+Training Pipeline:
+------------------
+    Training Data (JSONL)
+        │
+        ├── Input:  "Modern 3 bedroom house with garage"
+        └── Target: {"bedrooms": 3, "garage": true, ...}
+                │
+                ▼
+    T5-Small Fine-tuning
+        │
+        ├── Encoder: Processes input text
+        └── Decoder: Generates JSON specification
+                │
+                ▼
+    Trained Model (LAYER 1)
+        │
+        └── Used by inference_nlp.py for text-to-spec conversion
+
+Model Architecture:
+-------------------
+    - Base Model:    T5-small (~60MB parameters)
+    - Task Type:     Sequence-to-sequence (text-to-text)
+    - Input Format:  Natural language building description
+    - Output Format: JSON string with building specification
+    - Tokenizer:     SentencePiece (T5 default)
+
+Training Configuration:
+-----------------------
+    - Epochs:        3 (default)
+    - Batch Size:    4
+    - Learning Rate: 5e-5
+    - Optimizer:     AdamW with weight decay
+    - Warmup Steps:  50
+    - Train/Val Split: 90/10
+
+Data Format (JSONL):
+--------------------
+    {"text": "3 bedroom house", "spec": {"bedrooms": 3, "bathrooms": 1, ...}}
+    {"text": "apartment with 2 baths", "spec": {"bedrooms": 1, "bathrooms": 2, ...}}
+
+Usage:
+------
+    # Training mode (default)
+    python train_nlp_model.py
+
+    # Testing mode
+    python train_nlp_model.py test
+
+Output:
+-------
+    models/nlp_t5/final_model/
+    ├── config.json
+    ├── model.safetensors
+    ├── tokenizer.json
+    └── special_tokens_map.json
+
+The trained model is then used by the ArchiText pipeline, where its output is
+further refined by the rule-based layout optimizer (Layer 2) before BIM generation.
+
+Author: ArchiText Team
+Version: 1.0.0
+=============================================================================
 """
 
 import json

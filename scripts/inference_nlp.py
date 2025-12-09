@@ -1,6 +1,52 @@
 """
-Inference script for Text-to-Spec AI model.
-Converts natural language descriptions to JSON specifications.
+=============================================================================
+ArchiText: NLP Inference Engine (LAYER 1)
+=============================================================================
+
+This module implements the inference pipeline for the trained T5 transformer
+model that converts natural language building descriptions into structured
+JSON specifications.
+
+Position in ArchiText Pipeline:
+-------------------------------
+    This is LAYER 1 of the ArchiText system:
+
+    LAYER 1 (This Module): NLP Model
+    ├── Input:  Natural language (e.g., "3 bedroom house with 2 bathrooms")
+    ├── Model:  Fine-tuned T5-small transformer
+    └── Output: JSON specification {"bedrooms": 3, "bathrooms": 2, ...}
+                    │
+                    ▼
+    LAYER 2: Layout Optimization (Rule-Based Enhancement)
+    ├── Takes raw model output and applies architectural constraints
+    ├── Ensures proper room adjacencies and dimensions
+    └── Optimizes spatial layout for connectivity
+                    │
+                    ▼
+    LAYER 3: BIM Generation (IFC Export)
+
+Model Details:
+--------------
+    - Architecture: T5-small (text-to-text transformer)
+    - Training: Fine-tuned on building description dataset
+    - Input: Natural language text (up to 512 tokens)
+    - Output: JSON string with building specification
+    - Inference: Beam search (4 beams) for optimal output quality
+
+The model output is then refined by the rule-based layout optimizer (Layer 2),
+which enhances the raw specification with architectural best practices before
+generating the final BIM file.
+
+Example Usage:
+--------------
+    >>> inferencer = TextToSpecInference()
+    >>> spec = inferencer.predict("Modern 3 bedroom house with 2 bathrooms")
+    >>> print(spec)
+    {"bedrooms": 3, "bathrooms": 2, "kitchen": true, "living_room": true}
+
+Author: ArchiText Team
+Version: 1.0.0
+=============================================================================
 """
 
 import json

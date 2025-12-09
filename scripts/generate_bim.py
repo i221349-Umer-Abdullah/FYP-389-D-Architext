@@ -1,6 +1,48 @@
 """
-BIM Generation Engine using IfcOpenShell.
-Converts JSON building specifications to IFC files.
+=============================================================================
+ArchiText: BIM Generation Engine
+=============================================================================
+
+This module implements the IFC (Industry Foundation Classes) generation engine
+for the ArchiText system. It converts JSON building specifications into valid
+IFC files that can be opened in professional BIM software.
+
+Key Components:
+---------------
+1. BIMGenerator: Main class for IFC file creation
+2. Rule-Based Layout Optimizer: Enhances model output with architectural rules
+
+IFC Generation Process:
+-----------------------
+    1. Create IFC project hierarchy (Project → Site → Building → Storey)
+    2. Apply layout optimization using rule-based engine
+    3. Generate rooms with proper dimensions and placements
+    4. Create walls with accurate geometry (extruded profiles)
+    5. Establish spatial relationships between elements
+
+Output Compatibility:
+---------------------
+    - Autodesk Revit (IFC2X3 import)
+    - BlenderBIM / Bonsai
+    - FreeCAD
+    - ArchiCAD
+    - Any IFC-compliant viewer
+
+Technical Notes:
+----------------
+    - Uses IFC2X3 schema for maximum compatibility (especially Revit)
+    - Includes proper unit definitions (SI - meters)
+    - Creates IfcWallStandardCase for walls (better viewer support)
+    - Generates IfcSpace entities for room volumes
+
+Dependencies:
+-------------
+    - ifcopenshell: IFC file manipulation library
+    - layout_optimizer_rules: Rule-based layout optimization
+
+Author: ArchiText Team
+Version: 1.0.0
+=============================================================================
 """
 
 import json
@@ -8,17 +50,57 @@ import datetime
 import uuid
 import math
 from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+
 import ifcopenshell
 import ifcopenshell.api
 import ifcopenshell.geom
+
 from layout_optimizer_rules import RuleBasedLayoutOptimizer
 
 
+# =============================================================================
+# BIM GENERATOR CLASS
+# =============================================================================
+
 class BIMGenerator:
-    """Generate IFC BIM models from JSON specifications."""
-    
+    """
+    IFC BIM Generation Engine.
+
+    This class creates IFC (Industry Foundation Classes) files from building
+    specifications. It works in conjunction with the rule-based layout optimizer
+    to produce architecturally valid floor plans.
+
+    The generator handles:
+        - IFC project structure creation
+        - Spatial hierarchy (Project → Site → Building → Storey)
+        - Wall geometry generation
+        - Space/room definitions
+        - Unit assignments for proper scaling
+
+    Attributes:
+        ifc: The IfcOpenShell file object
+        project: The IfcProject entity
+        site: The IfcSite entity
+        building: The IfcBuilding entity
+        storey: The IfcBuildingStorey entity
+        owner_history: History information for IFC entities
+        geom_context: Geometric representation context
+
+    Example:
+        >>> generator = BIMGenerator()
+        >>> generator.create_project_structure("My House")
+        >>> generator.create_simple_room("Living Room", 5.0, 4.0, 2.7, 0, 0)
+        >>> generator.ifc.write("output.ifc")
+    """
+
     def __init__(self):
-        """Initialize BIM generator."""
+        """
+        Initialize the BIM generator.
+
+        Sets up instance variables for IFC entities. The actual IFC file
+        is created when create_project_structure() is called.
+        """
         self.ifc = None
         self.project = None
         self.site = None
@@ -30,62 +112,151 @@ class BIMGenerator:
     def create_project_structure(self, project_name: str = "AI Generated Building"):
         """
         Create the basic IFC project structure.
-        
+
         Args:
             project_name: Name of the building project
         """
-        # Create a new IFC file (IFC4 schema)
-        self.ifc = ifcopenshell.file(schema="IFC4")
-        
+        # Create a new IFC file (IFC2X3 for better Revit compatibility)
+        self.ifc = ifcopenshell.file(schema="IFC2X3")
+
         # Create basic IFC entities manually for compatibility
         create_guid = lambda: ifcopenshell.guid.compress(uuid.uuid4().hex)
-        
+
         # Create OwnerHistory
-        person = self.ifc.createIfcPerson()
-        person.GivenName = "AI"
-        person.FamilyName = "Generator"
-        
-        org = self.ifc.createIfcOrganization()
-        org.Name = "AI BIM System"
-        
-        person_org = self.ifc.createIfcPersonAndOrganization()
-        person_org.ThePerson = person
-        person_org.TheOrganization = org
-        
-        application = self.ifc.createIfcApplication()
-        application.ApplicationDeveloper = org
-        application.Version = "1.0"
-        application.ApplicationFullName = "Text-to-BIM AI"
-        application.ApplicationIdentifier = "TextToBIM"
-        
+        person = self.ifc.createIfcPerson(
+            None,  # Id
+            "Generator",  # FamilyName
+            "AI",  # GivenName
+            None, None, None, None, None
+        )
+
+        org = self.ifc.createIfcOrganization(
+            None,  # Id
+            "AI BIM System",  # Name
+            None, None, None
+        )
+
+        person_org = self.ifc.createIfcPersonAndOrganization(person, org, None)
+
+        application = self.ifc.createIfcApplication(
+            org,
+            "1.0",
+            "Text-to-BIM AI",
+            "TextToBIM"
+        )
+
         timestamp = int(datetime.datetime.now().timestamp())
-        
-        self.owner_history = self.ifc.createIfcOwnerHistory()
-        self.owner_history.OwningUser = person_org
-        self.owner_history.OwningApplication = application
-        self.owner_history.CreationDate = timestamp
-        
-        # Create project
-        self.project = self.ifc.createIfcProject(create_guid())
-        self.project.OwnerHistory = self.owner_history
-        self.project.Name = project_name
-        
+
+        self.owner_history = self.ifc.createIfcOwnerHistory(
+            person_org,
+            application,
+            None,  # State
+            "ADDED",  # ChangeAction (IFC2X3 enum)
+            None,  # LastModifiedDate
+            None,  # LastModifyingUser
+            None,  # LastModifyingApplication
+            timestamp  # CreationDate
+        )
+
+        # Create units (REQUIRED for Revit compatibility)
+        units = self._create_units()
+
+        # Create geometric representation context FIRST
+        world_coord = self.create_axis2placement_3d([0., 0., 0.])
+        self.geom_context = self.ifc.createIfcGeometricRepresentationContext(
+            None,  # ContextIdentifier
+            "Model",  # ContextType
+            3,  # CoordinateSpaceDimension
+            1.0e-5,  # Precision
+            world_coord,  # WorldCoordinateSystem
+            None  # TrueNorth
+        )
+
+        # Create subcontext for body representation (required by some viewers)
+        self.body_context = self.ifc.createIfcGeometricRepresentationSubContext(
+            "Body",  # ContextIdentifier
+            "Model",  # ContextType
+            None, None, None, None,  # Inherited from parent
+            self.geom_context,  # ParentContext
+            None,  # TargetScale
+            "MODEL_VIEW",  # TargetView
+            None  # UserDefinedTargetView
+        )
+
+        # Create project with units
+        self.project = self.ifc.createIfcProject(
+            create_guid(),
+            self.owner_history,
+            project_name,
+            None,  # Description
+            None,  # ObjectType
+            None,  # LongName
+            None,  # Phase
+            [self.geom_context],  # RepresentationContexts
+            units  # UnitsInContext
+        )
+
+        # Create site placement
+        site_placement = self.ifc.createIfcLocalPlacement(
+            None,
+            self.create_axis2placement_3d([0., 0., 0.])
+        )
+
         # Create site
-        self.site = self.ifc.createIfcSite(create_guid())
-        self.site.OwnerHistory = self.owner_history
-        self.site.Name = "Site"
-        
+        self.site = self.ifc.createIfcSite(
+            create_guid(),
+            self.owner_history,
+            "Site",
+            None,  # Description
+            None,  # ObjectType
+            site_placement,
+            None,  # Representation
+            None,  # LongName
+            "ELEMENT",  # CompositionType
+            None, None, None, None, None  # RefLatitude, RefLongitude, etc.
+        )
+
+        # Create building placement
+        building_placement = self.ifc.createIfcLocalPlacement(
+            site_placement,
+            self.create_axis2placement_3d([0., 0., 0.])
+        )
+
         # Create building
-        self.building = self.ifc.createIfcBuilding(create_guid())
-        self.building.OwnerHistory = self.owner_history
-        self.building.Name = "Building"
-        
+        self.building = self.ifc.createIfcBuilding(
+            create_guid(),
+            self.owner_history,
+            "Building",
+            None,  # Description
+            None,  # ObjectType
+            building_placement,
+            None,  # Representation
+            None,  # LongName
+            "ELEMENT",  # CompositionType
+            None, None, None  # ElevationOfRefHeight, ElevationOfTerrain, BuildingAddress
+        )
+
+        # Create storey placement
+        storey_placement_rel = self.create_axis2placement_3d([0., 0., 0.])
+        storey_local_placement = self.ifc.createIfcLocalPlacement(
+            building_placement,
+            storey_placement_rel
+        )
+
         # Create storey
-        self.storey = self.ifc.createIfcBuildingStorey(create_guid())
-        self.storey.OwnerHistory = self.owner_history
-        self.storey.Name = "Ground Floor"
-        self.storey.Elevation = 0.0
-        
+        self.storey = self.ifc.createIfcBuildingStorey(
+            create_guid(),
+            self.owner_history,
+            "Ground Floor",
+            None,  # Description
+            None,  # ObjectType
+            storey_local_placement,
+            None,  # Representation
+            None,  # LongName
+            "ELEMENT",  # CompositionType
+            0.0  # Elevation
+        )
+
         # Create spatial relationships
         self.ifc.createIfcRelAggregates(
             create_guid(),
@@ -95,7 +266,7 @@ class BIMGenerator:
             self.project,
             [self.site]
         )
-        
+
         self.ifc.createIfcRelAggregates(
             create_guid(),
             self.owner_history,
@@ -104,7 +275,7 @@ class BIMGenerator:
             self.site,
             [self.building]
         )
-        
+
         self.ifc.createIfcRelAggregates(
             create_guid(),
             self.owner_history,
@@ -114,30 +285,55 @@ class BIMGenerator:
             [self.storey]
         )
 
-        # Create geometric representation context
-        context_dim = 3
-        precision = 1.0e-5
-        self.geom_context = self.ifc.createIfcGeometricRepresentationContext(
-            None,
-            "Model",
-            context_dim,
-            precision,
-            self.create_axis2placement_3d([0., 0., 0.]),
-            None
+    def _create_units(self):
+        """Create SI units for the IFC file (required for Revit)."""
+        # Length unit: meters
+        length_unit = self.ifc.createIfcSIUnit(
+            None,  # Dimensions
+            "LENGTHUNIT",
+            None,  # Prefix (None = base unit, i.e., meters)
+            "METRE"
         )
 
-        # Create storey placement
-        storey_placement = self.create_axis2placement_3d([0., 0., 0.])
-        self.storey.ObjectPlacement = self.ifc.createIfcLocalPlacement(
+        # Area unit: square meters
+        area_unit = self.ifc.createIfcSIUnit(
             None,
-            storey_placement
+            "AREAUNIT",
+            None,
+            "SQUARE_METRE"
         )
+
+        # Volume unit: cubic meters
+        volume_unit = self.ifc.createIfcSIUnit(
+            None,
+            "VOLUMEUNIT",
+            None,
+            "CUBIC_METRE"
+        )
+
+        # Plane angle unit: radians
+        plane_angle_unit = self.ifc.createIfcSIUnit(
+            None,
+            "PLANEANGLEUNIT",
+            None,
+            "RADIAN"
+        )
+
+        # Create unit assignment
+        units = self.ifc.createIfcUnitAssignment([
+            length_unit,
+            area_unit,
+            volume_unit,
+            plane_angle_unit
+        ])
+
+        return units
 
     def create_simple_room(self, name: str, length: float, width: float, height: float = 2.7,
                           x_offset: float = 0.0, y_offset: float = 0.0):
         """
         Create a simple rectangular room with walls.
-        
+
         Args:
             name: Name of the room (e.g., "Bedroom 1")
             length: Length of the room in meters
@@ -145,17 +341,32 @@ class BIMGenerator:
             height: Height of the room in meters (default 2.7m)
             x_offset: X position offset in meters
             y_offset: Y position offset in meters
-            
+
         Returns:
             The created IfcSpace object
         """
         create_guid = lambda: ifcopenshell.guid.compress(uuid.uuid4().hex)
-        
-        # Create space object
-        space = self.ifc.createIfcSpace(create_guid())
-        space.OwnerHistory = self.owner_history
-        space.Name = name
-        
+
+        # Create space placement
+        space_placement = self.ifc.createIfcLocalPlacement(
+            self.storey.ObjectPlacement,
+            self.create_axis2placement_3d([x_offset, y_offset, 0.0])
+        )
+
+        # Create space object (IFC2X3 compatible)
+        space = self.ifc.createIfcSpace(
+            create_guid(),
+            self.owner_history,
+            name,
+            None,  # Description
+            None,  # ObjectType
+            space_placement,
+            None,  # Representation
+            None,  # LongName
+            "ELEMENT",  # CompositionType
+            "INTERNAL"  # InteriorOrExteriorSpace (IFC2X3)
+        )
+
         # Assign space to storey
         self.ifc.createIfcRelContainedInSpatialStructure(
             create_guid(),
@@ -165,13 +376,13 @@ class BIMGenerator:
             [space],
             self.storey
         )
-        
+
         # Wall thickness
         wall_thickness = 0.2  # 20cm
-        
+
         # Create four walls for the room
         walls = []
-        
+
         # Wall data: (name, start_x, start_y, end_x, end_y)
         wall_coords = [
             (f"{name} - South Wall", x_offset, y_offset, x_offset + length, y_offset),
@@ -179,35 +390,118 @@ class BIMGenerator:
             (f"{name} - North Wall", x_offset + length, y_offset + width, x_offset, y_offset + width),
             (f"{name} - West Wall", x_offset, y_offset + width, x_offset, y_offset)
         ]
-        
+
         for wall_name, x1, y1, x2, y2 in wall_coords:
             wall = self.create_wall(wall_name, x1, y1, x2, y2, height, wall_thickness)
             walls.append(wall)
-        
+
         return space
     
     def create_wall(self, name: str, x1: float, y1: float, x2: float, y2: float,
                    height: float = 2.7, thickness: float = 0.2):
         """
-        Create a wall between two points.
-        
+        Create a wall between two points using proper IFC conventions.
+
         Args:
             name: Wall name
-            x1, y1: Start coordinates
-            x2, y2: End coordinates
+            x1, y1: Start coordinates (wall centerline)
+            x2, y2: End coordinates (wall centerline)
             height: Wall height in meters
             thickness: Wall thickness in meters
-            
+
         Returns:
             The created IfcWall object
         """
         create_guid = lambda: ifcopenshell.guid.compress(uuid.uuid4().hex)
-        
-        # Create wall element
-        wall = self.ifc.createIfcWall(create_guid())
-        wall.OwnerHistory = self.owner_history
-        wall.Name = name
-        
+
+        # Calculate wall geometry
+        dx = x2 - x1
+        dy = y2 - y1
+        length = math.sqrt(dx**2 + dy**2)
+
+        if length < 1e-6:
+            length = 1e-6
+            dx, dy = 1.0, 0.0
+        else:
+            dx, dy = dx / length, dy / length
+
+        # Wall placement - position at start point, rotated to wall direction
+        wall_placement_3d = self.create_axis2placement_3d(
+            [x1, y1, 0.0],       # Location at wall start
+            [0.0, 0.0, 1.0],     # Z axis up
+            [dx, dy, 0.0]        # X axis along wall direction
+        )
+        wall_local_placement = self.ifc.createIfcLocalPlacement(
+            self.storey.ObjectPlacement,
+            wall_placement_3d
+        )
+
+        # Create wall element (IFC2X3 compatible)
+        wall = self.ifc.createIfcWallStandardCase(
+            create_guid(),
+            self.owner_history,
+            name,
+            None,  # Description
+            None,  # ObjectType
+            wall_local_placement,
+            None,  # Representation (set below)
+            None   # Tag
+        )
+
+        # Perpendicular direction (for thickness)
+        half_t = thickness / 2.0
+
+        # Create polygon profile points (wall cross-section in XY plane at origin)
+        points = [
+            self.ifc.createIfcCartesianPoint((0.0, -half_t)),
+            self.ifc.createIfcCartesianPoint((length, -half_t)),
+            self.ifc.createIfcCartesianPoint((length, half_t)),
+            self.ifc.createIfcCartesianPoint((0.0, half_t)),
+        ]
+
+        # Create closed polyline
+        polyline = self.ifc.createIfcPolyline(points + [points[0]])
+
+        # Create arbitrary closed profile
+        profile = self.ifc.createIfcArbitraryClosedProfileDef(
+            "AREA",
+            f"{name}_Profile",
+            polyline
+        )
+
+        # Extrusion placement at origin
+        extrusion_placement = self.create_axis2placement_3d(
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [1.0, 0.0, 0.0]
+        )
+
+        # Create extruded solid
+        dir_vec = self.ifc.createIfcDirection((0.0, 0.0, 1.0))
+        extruded_solid = self.ifc.createIfcExtrudedAreaSolid(
+            profile,
+            extrusion_placement,
+            dir_vec,
+            height
+        )
+
+        # Create shape representation using the body subcontext
+        context = self.body_context if hasattr(self, 'body_context') else self.geom_context
+        shape_rep = self.ifc.createIfcShapeRepresentation(
+            context,
+            "Body",
+            "SweptSolid",
+            [extruded_solid]
+        )
+
+        # Create product definition shape
+        product_shape = self.ifc.createIfcProductDefinitionShape(
+            None,
+            None,
+            [shape_rep]
+        )
+        wall.Representation = product_shape
+
         # Assign wall to storey
         self.ifc.createIfcRelContainedInSpatialStructure(
             create_guid(),
@@ -216,55 +510,6 @@ class BIMGenerator:
             None,
             [wall],
             self.storey
-        )
-
-        # Calculate wall geometry
-        geom = self.calculate_wall_geometry(x1, y1, x2, y2, thickness)
-
-        # Create wall profile (rectangular cross-section)
-        profile = self.create_rectangle_profile(
-            thickness,
-            geom["length"],
-            f"{name}_Profile"
-        )
-
-        # Create extrusion placement
-        extrusion_position = self.create_axis2placement_3d(
-            [x1, y1, 0.],
-            [0., 0., 1.],
-            geom["x_direction"]
-        )
-
-        # Create extruded solid (extrude vertically)
-        extruded_solid = self.create_extruded_solid(
-            profile,
-            extrusion_position,
-            [0., 0., 1.],
-            height
-        )
-
-        # Create shape representation
-        shape_rep = self.create_shape_representation([extruded_solid])
-
-        # Create product definition shape
-        product_shape = self.ifc.createIfcProductDefinitionShape(
-            None,
-            None,
-            [shape_rep]
-        )
-
-        # Assign shape to wall
-        wall.Representation = product_shape
-
-        # Create wall placement
-        wall_placement = self.create_axis2placement_3d(
-            geom["center"],
-            [0., 0., 1.],
-            geom["x_direction"]
-        )
-        wall.ObjectPlacement = self.create_local_placement(
-            wall_placement,
-            self.storey.ObjectPlacement
         )
 
         return wall
