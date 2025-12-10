@@ -7,58 +7,19 @@ This Blender add-on provides a user-friendly interface for the ArchiText
 Text-to-BIM pipeline, allowing architects and designers to generate 3D
 building models directly within Blender using natural language descriptions.
 
-Features:
----------
-    - Natural Language Input: Describe buildings in plain English
-    - AI-Powered Generation: Uses trained T5 transformer for text understanding
-    - Rule-Based Enhancement: Layout optimizer ensures architectural validity
-    - Direct Blender Integration: Automatic import of generated IFC models
-    - Quick Mode: Bypass NLP for direct specification input
-    - Style Presets: Modern, Traditional, Minimalist, Luxury
-
-Architecture Integration:
--------------------------
-    The add-on connects to the ArchiText pipeline:
-
-    Blender UI (This Add-on)
-        │
-        ├── Full Mode: Uses complete pipeline
-        │   └── NLP Model (Layer 1) → Layout Optimizer (Layer 2) → IFC (Layer 3)
-        │
-        └── Quick Mode: Direct specification
-            └── Layout Optimizer (Layer 2) → IFC (Layer 3)
-
-Requirements:
--------------
-    - Blender 4.0 or higher
-    - Bonsai/BlenderBIM add-on (for IFC import)
-    - ArchiText scripts directory configured in preferences
-    - PyTorch and Transformers (for NLP mode, optional)
-
-Installation:
--------------
-    1. Package the add-on using: python blender_addon/package_addon.py
-    2. In Blender: Edit → Preferences → Add-ons → Install
-    3. Select the generated architext_addon.zip
-    4. Enable "ArchiText - Text to BIM"
-    5. Configure scripts path in add-on preferences
-
-Usage:
-------
-    1. Open Blender's sidebar (N key) → ArchiText tab
-    2. Enter a building description or load an example
-    3. Click "Generate Building" to create the model
-    4. The IFC file will be automatically imported if Bonsai is installed
+IMPORTANT: This add-on uses subprocess to call an external Python environment
+that has all required dependencies (transformers, torch, ifcopenshell).
+It does NOT import these packages directly into Blender's Python.
 
 Author: ArchiText Team
-Version: 1.0.0
+Version: 1.1.0
 =============================================================================
 """
 
 bl_info = {
     "name": "ArchiText - Text to BIM",
     "author": "ArchiText Team",
-    "version": (1, 0, 0),
+    "version": (1, 1, 0),
     "blender": (4, 0, 0),
     "location": "View3D > Sidebar > ArchiText",
     "description": "Generate 3D building models from natural language descriptions",
@@ -68,6 +29,8 @@ bl_info = {
 import bpy
 import os
 import sys
+import subprocess
+import json
 import tempfile
 from bpy.props import (
     StringProperty,
@@ -119,10 +82,11 @@ class ARCHITEXT_Properties(PropertyGroup):
         unit='LENGTH',
     )
 
-    # Style presets
+    # Style presets (FUTURE: not yet implemented in generation pipeline)
+    # This property is defined for future use but currently has no effect
     style_preset: EnumProperty(
         name="Style",
-        description="Building style preset",
+        description="Building style preset (not yet implemented)",
         items=[
             ('modern', "Modern", "Contemporary design with clean lines"),
             ('traditional', "Traditional", "Classic architectural style"),
@@ -164,6 +128,13 @@ class ARCHITEXT_Properties(PropertyGroup):
 class ARCHITEXT_Preferences(AddonPreferences):
     bl_idname = __name__
 
+    python_path: StringProperty(
+        name="Python Executable",
+        description="Path to Python executable in your ArchiText venv (e.g., D:/Work/Uni/FYP/architext/venv/Scripts/python.exe)",
+        default="",
+        subtype='FILE_PATH',
+    )
+
     scripts_path: StringProperty(
         name="Scripts Path",
         description="Path to ArchiText scripts folder",
@@ -173,10 +144,152 @@ class ARCHITEXT_Preferences(AddonPreferences):
 
     def draw(self, context):
         layout = self.layout
-        layout.prop(self, "scripts_path")
 
+        box = layout.box()
+        box.label(text="ArchiText Configuration", icon='SETTINGS')
+
+        col = box.column(align=True)
+        col.prop(self, "python_path")
+        col.prop(self, "scripts_path")
+
+        if not self.python_path:
+            box.label(text="Please set the path to your venv Python executable", icon='ERROR')
         if not self.scripts_path:
-            layout.label(text="Please set the path to your ArchiText scripts folder", icon='ERROR')
+            box.label(text="Please set the path to your ArchiText scripts folder", icon='ERROR')
+
+        # Auto-detect button
+        row = box.row()
+        row.operator("architext.auto_detect_paths", text="Auto-Detect Paths", icon='FILE_REFRESH')
+
+        # Test configuration button
+        row = box.row()
+        row.operator("architext.test_config", text="Test Configuration", icon='CHECKMARK')
+
+
+class ARCHITEXT_OT_AutoDetectPaths(Operator):
+    """Try to auto-detect ArchiText paths"""
+    bl_idname = "architext.auto_detect_paths"
+    bl_label = "Auto-Detect Paths"
+
+    def execute(self, context):
+        prefs = context.preferences.addons[__name__].preferences
+        addon_dir = os.path.dirname(os.path.realpath(__file__))
+
+        # Try to find project root
+        possible_roots = [
+            os.path.join(addon_dir, "..", ".."),
+            os.path.join(addon_dir, "..", "..", ".."),
+            "D:/Work/Uni/FYP/architext",
+        ]
+
+        for root in possible_roots:
+            root = os.path.abspath(root)
+            scripts = os.path.join(root, "scripts")
+            venv_python = os.path.join(root, "venv", "Scripts", "python.exe")
+
+            if os.path.exists(scripts) and os.path.exists(venv_python):
+                prefs.scripts_path = scripts
+                prefs.python_path = venv_python
+                self.report({'INFO'}, f"Found ArchiText at: {root}")
+                return {'FINISHED'}
+
+        self.report({'WARNING'}, "Could not auto-detect paths. Please set manually.")
+        return {'CANCELLED'}
+
+
+class ARCHITEXT_OT_TestConfig(Operator):
+    """Test ArchiText configuration by running a simple Python test"""
+    bl_idname = "architext.test_config"
+    bl_label = "Test Configuration"
+
+    def execute(self, context):
+        prefs = context.preferences.addons[__name__].preferences
+
+        print("\n" + "=" * 60)
+        print("ARCHITEXT CONFIGURATION TEST")
+        print("=" * 60)
+
+        # Check Python path
+        if not prefs.python_path:
+            self.report({'ERROR'}, "Python path not set!")
+            print("[ERROR] Python path is not configured")
+            return {'CANCELLED'}
+
+        if not os.path.exists(prefs.python_path):
+            self.report({'ERROR'}, f"Python not found: {prefs.python_path}")
+            print(f"[ERROR] Python executable not found at: {prefs.python_path}")
+            return {'CANCELLED'}
+
+        print(f"[OK] Python path: {prefs.python_path}")
+
+        # Check scripts path
+        if not prefs.scripts_path:
+            self.report({'ERROR'}, "Scripts path not set!")
+            print("[ERROR] Scripts path is not configured")
+            return {'CANCELLED'}
+
+        if not os.path.exists(prefs.scripts_path):
+            self.report({'ERROR'}, f"Scripts folder not found: {prefs.scripts_path}")
+            print(f"[ERROR] Scripts folder not found at: {prefs.scripts_path}")
+            return {'CANCELLED'}
+
+        print(f"[OK] Scripts path: {prefs.scripts_path}")
+
+        # Check run_pipeline.py exists
+        run_script = os.path.join(prefs.scripts_path, "run_pipeline.py")
+        if not os.path.exists(run_script):
+            self.report({'ERROR'}, "run_pipeline.py not found!")
+            print(f"[ERROR] run_pipeline.py not found at: {run_script}")
+            return {'CANCELLED'}
+
+        print(f"[OK] run_pipeline.py found")
+
+        # Test Python execution
+        print("\n[TEST] Running Python version check...")
+        try:
+            result = subprocess.run(
+                [prefs.python_path, "--version"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0:
+                print(f"[OK] Python version: {result.stdout.strip()}")
+            else:
+                print(f"[WARN] Python check returned: {result.stderr}")
+        except Exception as e:
+            print(f"[ERROR] Failed to run Python: {e}")
+            self.report({'ERROR'}, f"Cannot run Python: {e}")
+            return {'CANCELLED'}
+
+        # Test if transformers is available in the venv
+        print("\n[TEST] Checking transformers module...")
+        try:
+            result = subprocess.run(
+                [prefs.python_path, "-c", "import transformers; print('transformers OK:', transformers.__version__)"],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            if result.returncode == 0:
+                print(f"[OK] {result.stdout.strip()}")
+            else:
+                print(f"[ERROR] transformers not available: {result.stderr.strip()[:100]}")
+                self.report({'ERROR'}, "transformers not installed in venv")
+                return {'CANCELLED'}
+        except subprocess.TimeoutExpired:
+            print("[ERROR] Timeout checking transformers")
+            self.report({'ERROR'}, "Timeout checking transformers")
+            return {'CANCELLED'}
+        except Exception as e:
+            print(f"[ERROR] Exception: {e}")
+
+        print("\n" + "=" * 60)
+        print("CONFIGURATION TEST PASSED!")
+        print("=" * 60 + "\n")
+
+        self.report({'INFO'}, "Configuration test passed! All dependencies found.")
+        return {'FINISHED'}
 
 
 # ============================================================================
@@ -184,7 +297,7 @@ class ARCHITEXT_Preferences(AddonPreferences):
 # ============================================================================
 
 class ARCHITEXT_OT_Generate(Operator):
-    """Generate a building from text description"""
+    """Generate a building from text description using the full NLP pipeline"""
     bl_idname = "architext.generate"
     bl_label = "Generate Building"
     bl_options = {'REGISTER', 'UNDO'}
@@ -193,145 +306,160 @@ class ARCHITEXT_OT_Generate(Operator):
         props = context.scene.architext
         prefs = context.preferences.addons[__name__].preferences
 
-        # Get scripts path
-        scripts_path = prefs.scripts_path
-        if not scripts_path:
-            # Try to find it relative to add-on
-            addon_dir = os.path.dirname(os.path.realpath(__file__))
-            possible_paths = [
-                os.path.join(addon_dir, "..", "..", "scripts"),
-                os.path.join(addon_dir, "..", "..", "..", "architext", "scripts"),
-            ]
-            for p in possible_paths:
-                if os.path.exists(p):
-                    scripts_path = os.path.abspath(p)
-                    break
+        print("\n" + "=" * 60)
+        print("ARCHITEXT: Generate Building (Full NLP Mode)")
+        print("=" * 60)
+        print(f"Version: 1.1.0 (Subprocess Mode)")
+        print(f"Prompt: {props.prompt[:50]}...")
 
-        if not scripts_path or not os.path.exists(scripts_path):
-            self.report({'ERROR'}, "Scripts path not found. Please set it in add-on preferences.")
+        # Validate paths
+        if not prefs.python_path or not os.path.exists(prefs.python_path):
+            self.report({'ERROR'}, "Python path not set. Please configure in add-on preferences.")
+            props.status_message = "Error: Python path not set"
+            print("[ERROR] Python path not configured!")
             return {'CANCELLED'}
 
-        # Add to path
-        if scripts_path not in sys.path:
-            sys.path.insert(0, scripts_path)
+        if not prefs.scripts_path or not os.path.exists(prefs.scripts_path):
+            self.report({'ERROR'}, "Scripts path not set. Please configure in add-on preferences.")
+            props.status_message = "Error: Scripts path not set"
+            print("[ERROR] Scripts path not configured!")
+            return {'CANCELLED'}
+
+        print(f"[OK] Python: {prefs.python_path}")
+        print(f"[OK] Scripts: {prefs.scripts_path}")
 
         props.is_generating = True
-        props.status_message = "Generating layout..."
+        props.status_message = "Generating with AI model..."
 
         try:
-            # Check if transformers is available
+            # Prepare output path
+            project_root = os.path.dirname(prefs.scripts_path)
+            output_dir = os.path.join(project_root, "output")
+            os.makedirs(output_dir, exist_ok=True)
+
+            # Create safe filename from prompt
+            safe_name = "".join(c if c.isalnum() else "_" for c in props.prompt[:30])
+            output_path = os.path.join(output_dir, f"blender_{safe_name}.ifc")
+
+            # Call external Python with run_pipeline.py
+            run_script = os.path.join(prefs.scripts_path, "run_pipeline.py")
+
+            if not os.path.exists(run_script):
+                self.report({'ERROR'}, f"run_pipeline.py not found at {run_script}")
+                props.status_message = "Error: run_pipeline.py not found"
+                print(f"[ERROR] run_pipeline.py not found at: {run_script}")
+                return {'CANCELLED'}
+
+            print(f"[OK] Found run_pipeline.py")
+            print(f"\n[RUNNING] Calling external Python via subprocess...")
+            print(f"Command: {prefs.python_path} {run_script} \"{props.prompt}\"")
+            print("-" * 60)
+
+            props.status_message = "Running NLP model..."
+
+            # Run the pipeline via subprocess
+            # Use Popen with temp files to avoid pipe buffer issues on Windows
+            import tempfile
+            stdout_file = tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix='.txt')
+            stderr_file = tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix='.txt')
+
             try:
-                import transformers
-                has_nlp = True
-            except ImportError:
-                has_nlp = False
+                # Use CREATE_NO_WINDOW on Windows to prevent console flash
+                startupinfo = None
+                creationflags = 0
+                if sys.platform == 'win32':
+                    startupinfo = subprocess.STARTUPINFO()
+                    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                    creationflags = subprocess.CREATE_NO_WINDOW
 
-            if has_nlp:
-                # Full NLP pipeline
-                from text_to_bim import TextToBIMPipeline
-                pipeline = TextToBIMPipeline()
-
-                output_dir = os.path.join(os.path.dirname(scripts_path), "output")
-                os.makedirs(output_dir, exist_ok=True)
-                output_path = os.path.join(output_dir, "blender_generated.ifc")
-
-                props.status_message = "Processing text with AI..."
-
-                result = pipeline.generate(
-                    props.prompt,
-                    output_path=output_path,
-                    wall_height=props.wall_height,
+                process = subprocess.Popen(
+                    [prefs.python_path, run_script, props.prompt],
+                    stdout=stdout_file,
+                    stderr=stderr_file,
+                    cwd=project_root,
+                    startupinfo=startupinfo,
+                    creationflags=creationflags
                 )
-            else:
-                # Fallback: Parse text simply and use rule-based
-                props.status_message = "Using rule-based generator..."
 
-                from generate_bim import BIMGenerator
-                from layout_optimizer_rules import RuleBasedLayoutOptimizer
+                # Wait for completion with timeout
+                return_code = process.wait(timeout=120)
 
-                # Simple text parsing
-                text = props.prompt.lower()
-                spec = {
-                    "bedrooms": 0,
-                    "bathrooms": 0,
-                    "kitchen": False,
-                    "living_room": False,
-                    "dining_room": False,
-                    "study": False,
-                    "garage": False,
-                }
+                # Read outputs
+                stdout_file.seek(0)
+                stderr_file.seek(0)
+                stdout_content = stdout_file.read()
+                stderr_content = stderr_file.read()
 
-                # Parse bedrooms
-                import re
-                bed_match = re.search(r'(\d+)\s*(?:bed(?:room)?s?)', text)
-                if bed_match:
-                    spec["bedrooms"] = int(bed_match.group(1))
-                elif "bedroom" in text:
-                    spec["bedrooms"] = 1
-
-                # Parse bathrooms
-                bath_match = re.search(r'(\d+)\s*(?:bath(?:room)?s?)', text)
-                if bath_match:
-                    spec["bathrooms"] = int(bath_match.group(1))
-                elif "bathroom" in text or "bath" in text:
-                    spec["bathrooms"] = 1
-
-                # Parse other rooms
-                spec["kitchen"] = "kitchen" in text
-                spec["living_room"] = "living" in text or "lounge" in text
-                spec["dining_room"] = "dining" in text
-                spec["study"] = "study" in text or "office" in text
-                spec["garage"] = "garage" in text
-
-                # Ensure minimum rooms
-                if spec["bedrooms"] == 0:
-                    spec["bedrooms"] = 2
-                if spec["bathrooms"] == 0:
-                    spec["bathrooms"] = 1
-                if not spec["kitchen"]:
-                    spec["kitchen"] = True
-                if not spec["living_room"]:
-                    spec["living_room"] = True
-
-                # Generate
-                generator = BIMGenerator()
-                output_dir = os.path.join(os.path.dirname(scripts_path), "output")
-                os.makedirs(output_dir, exist_ok=True)
-                output_path = os.path.join(output_dir, "blender_generated.ifc")
-
-                generator.generate_from_spec(spec, output_path)
-                result = {"success": True, "ifc_file": output_path}
-
-            props.status_message = "IFC file created!"
-
-            # Auto import if enabled
-            if props.auto_import and os.path.exists(output_path):
-                props.status_message = "Importing into Blender..."
-
-                # Clear scene if requested
-                if props.clear_scene:
-                    bpy.ops.object.select_all(action='SELECT')
-                    bpy.ops.object.delete()
-
-                # Try to use Bonsai/BlenderBIM to import
+            finally:
+                stdout_file.close()
+                stderr_file.close()
+                # Clean up temp files
                 try:
-                    bpy.ops.bim.load_project(filepath=output_path)
-                    props.status_message = "Building imported successfully!"
-                except Exception as e:
-                    # Fallback: just report the file location
-                    props.status_message = f"Generated: {output_path}"
-                    self.report({'INFO'}, f"IFC file saved to: {output_path}")
+                    os.unlink(stdout_file.name)
+                    os.unlink(stderr_file.name)
+                except:
+                    pass
 
-            self.report({'INFO'}, f"Building generated successfully!")
+            print("-" * 60)
+            print(f"[DONE] Subprocess returned with code: {return_code}")
 
-        except ImportError as e:
-            props.status_message = f"Import error: {str(e)}"
-            self.report({'ERROR'}, f"Could not import modules: {str(e)}")
+            if return_code != 0:
+                print(f"\n[ERROR] Generation failed!")
+                print(f"STDOUT:\n{stdout_content[:500] if stdout_content else '(empty)'}")
+                print(f"STDERR:\n{stderr_content[:500] if stderr_content else '(empty)'}")
+                error_msg = stderr_content[:200] if stderr_content else "Unknown error (check Blender console)"
+                self.report({'ERROR'}, f"Generation failed: {error_msg}")
+                props.status_message = f"Error: Check console for details"
+                return {'CANCELLED'}
+
+            print(f"\n[SUCCESS] Generation completed!")
+            if stdout_content:
+                print(f"STDOUT (last 300 chars):\n...{stdout_content[-300:]}")
+
+            # Find the generated IFC file from output
+            # The script prints the path, let's parse it
+            output_lines = stdout_content.split('\n')
+            ifc_path = None
+            for line in output_lines:
+                if "IFC File:" in line or ".ifc" in line.lower():
+                    # Extract path from line
+                    if ":" in line and ".ifc" in line:
+                        parts = line.split(":", 1)
+                        if len(parts) > 1:
+                            potential_path = parts[1].strip()
+                            if os.path.exists(potential_path):
+                                ifc_path = potential_path
+                                break
+
+            # If not found, look for recent IFC in output folder
+            if not ifc_path:
+                import glob
+                ifc_files = glob.glob(os.path.join(output_dir, "*.ifc"))
+                if ifc_files:
+                    ifc_path = max(ifc_files, key=os.path.getmtime)
+
+            if not ifc_path or not os.path.exists(ifc_path):
+                self.report({'WARNING'}, "IFC file generated but path not found")
+                props.status_message = "Generated - check output folder"
+                return {'FINISHED'}
+
+            props.status_message = "IFC created! Importing..."
+
+            # Import into Blender
+            if props.auto_import:
+                self._import_ifc(context, ifc_path, props)
+
+            props.status_message = f"Success! {os.path.basename(ifc_path)}"
+            self.report({'INFO'}, f"Building generated: {ifc_path}")
+
+        except subprocess.TimeoutExpired:
+            self.report({'ERROR'}, "Generation timed out (>2 minutes)")
+            props.status_message = "Error: Timeout"
             return {'CANCELLED'}
 
         except Exception as e:
-            props.status_message = f"Error: {str(e)}"
-            self.report({'ERROR'}, f"Generation failed: {str(e)}")
+            self.report({'ERROR'}, f"Error: {str(e)}")
+            props.status_message = f"Error: {str(e)[:50]}"
             return {'CANCELLED'}
 
         finally:
@@ -339,9 +467,42 @@ class ARCHITEXT_OT_Generate(Operator):
 
         return {'FINISHED'}
 
+    def _import_ifc(self, context, ifc_path, props):
+        """Import IFC file into Blender with robust error handling."""
+        print(f"[Generate] Attempting to import: {ifc_path}")
+
+        try:
+            if props.clear_scene:
+                bpy.ops.object.select_all(action='SELECT')
+                bpy.ops.object.delete()
+        except Exception as e:
+            print(f"[Generate] Clear scene failed: {e}")
+
+        # Try Bonsai/BlenderBIM first (with safety checks)
+        try:
+            if hasattr(bpy.ops, 'bim') and hasattr(bpy.ops.bim, 'load_project'):
+                bpy.ops.bim.load_project(filepath=ifc_path)
+                print("[Generate] Imported via BlenderBIM")
+                return
+        except Exception as e:
+            print(f"[Generate] BlenderBIM import failed: {e}")
+
+        # Fallback: try native IFC import (Blender 4.0+)
+        try:
+            if hasattr(bpy.ops, 'import_scene') and hasattr(bpy.ops.import_scene, 'ifc'):
+                bpy.ops.import_scene.ifc(filepath=ifc_path)
+                print("[Generate] Imported via native IFC")
+                return
+        except Exception as e:
+            print(f"[Generate] Native IFC import failed: {e}")
+
+        # Final fallback: just report location
+        print(f"[Generate] Auto-import failed. File at: {ifc_path}")
+        props.status_message = f"Generated: {ifc_path}"
+
 
 class ARCHITEXT_OT_GenerateQuick(Operator):
-    """Generate building using rule-based optimizer (faster, no NLP)"""
+    """Generate building using direct specification (faster, no NLP)"""
     bl_idname = "architext.generate_quick"
     bl_label = "Quick Generate"
     bl_options = {'REGISTER', 'UNDO'}
@@ -354,53 +515,122 @@ class ARCHITEXT_OT_GenerateQuick(Operator):
     has_study: BoolProperty(name="Study", default=False)
     has_garage: BoolProperty(name="Garage", default=False)
 
+    # Area/Plot size options
+    use_area_bounds: BoolProperty(
+        name="Specify Plot Size",
+        description="Constrain building to a specific plot area",
+        default=False
+    )
+    area_unit: EnumProperty(
+        name="Unit",
+        items=[
+            ('marla', "Marla", "1 marla = 272.25 sq ft (Pakistan/India)"),
+            ('kanal', "Kanal", "1 kanal = 20 marla"),
+            ('sqft', "Sq Feet", "Square feet"),
+            ('sqm', "Sq Meters", "Square meters"),
+            ('dimensions', "W x H", "Specific width x height in meters"),
+        ],
+        default='marla'
+    )
+    area_value: FloatProperty(
+        name="Size",
+        description="Plot size in selected unit",
+        default=5.0,
+        min=1.0,
+        max=100.0
+    )
+    plot_width: FloatProperty(
+        name="Width (m)",
+        description="Plot width in meters",
+        default=10.0,
+        min=5.0,
+        max=50.0
+    )
+    plot_height: FloatProperty(
+        name="Depth (m)",
+        description="Plot depth in meters",
+        default=15.0,
+        min=5.0,
+        max=50.0
+    )
+
     def invoke(self, context, event):
-        return context.window_manager.invoke_props_dialog(self, width=300)
+        # Use larger width to ensure all content is visible
+        return context.window_manager.invoke_props_dialog(self, width=450)
 
     def draw(self, context):
         layout = self.layout
-        layout.prop(self, "bedrooms")
-        layout.prop(self, "bathrooms")
+
+        # =====================================================================
+        # SECTION 1: ROOM CONFIGURATION
+        # =====================================================================
+        box1 = layout.box()
+        box1.label(text="Room Configuration", icon='HOME')
+
+        # Bedroom and bathroom counts
+        row = box1.row(align=True)
+        row.prop(self, "bedrooms", text="Bedrooms")
+        row.prop(self, "bathrooms", text="Bathrooms")
+
+        # Room checkboxes - simple column layout
+        col = box1.column(align=True)
+        row1 = col.row(align=True)
+        row1.prop(self, "has_kitchen", text="Kitchen")
+        row1.prop(self, "has_living", text="Living")
+        row2 = col.row(align=True)
+        row2.prop(self, "has_dining", text="Dining")
+        row2.prop(self, "has_study", text="Study")
+        row3 = col.row(align=True)
+        row3.prop(self, "has_garage", text="Garage")
+
+        # =====================================================================
+        # SECTION 2: PLOT SIZE CONSTRAINTS (ALWAYS VISIBLE)
+        # =====================================================================
         layout.separator()
-        col = layout.column(align=True)
-        col.prop(self, "has_kitchen")
-        col.prop(self, "has_living")
-        col.prop(self, "has_dining")
-        col.prop(self, "has_study")
-        col.prop(self, "has_garage")
+
+        box2 = layout.box()
+        box2.label(text="Plot Size Constraints", icon='ORIENTATION_LOCAL')
+
+        # Checkbox to enable/disable
+        box2.prop(self, "use_area_bounds", text="Enable Plot Size Limit")
+
+        # Show options when enabled
+        if self.use_area_bounds:
+            box2.separator()
+
+            # Unit selection
+            box2.prop(self, "area_unit", text="Unit")
+
+            # Size input based on unit
+            if self.area_unit == 'dimensions':
+                row = box2.row(align=True)
+                row.prop(self, "plot_width", text="Width")
+                row.prop(self, "plot_height", text="Depth")
+            else:
+                box2.prop(self, "area_value", text="Plot Size")
 
     def execute(self, context):
         props = context.scene.architext
         prefs = context.preferences.addons[__name__].preferences
 
-        # Get scripts path
-        scripts_path = prefs.scripts_path
-        if not scripts_path:
-            addon_dir = os.path.dirname(os.path.realpath(__file__))
-            possible_paths = [
-                os.path.join(addon_dir, "..", "..", "scripts"),
-                os.path.join(addon_dir, "..", "..", "..", "architext", "scripts"),
-            ]
-            for p in possible_paths:
-                if os.path.exists(p):
-                    scripts_path = os.path.abspath(p)
-                    break
-
-        if not scripts_path or not os.path.exists(scripts_path):
-            self.report({'ERROR'}, "Scripts path not found.")
+        # Validate paths
+        if not prefs.python_path or not os.path.exists(prefs.python_path):
+            self.report({'ERROR'}, "Python path not set. Please configure in add-on preferences.")
             return {'CANCELLED'}
 
-        if scripts_path not in sys.path:
-            sys.path.insert(0, scripts_path)
+        if not prefs.scripts_path or not os.path.exists(prefs.scripts_path):
+            self.report({'ERROR'}, "Scripts path not set. Please configure in add-on preferences.")
+            return {'CANCELLED'}
 
         props.is_generating = True
-        props.status_message = "Generating..."
+        props.status_message = "Generating (Quick Mode)..."
+
+        print("\n" + "=" * 60)
+        print("ARCHITEXT: Quick Generate (Direct JSON Mode)")
+        print("=" * 60)
 
         try:
-            from generate_bim import BIMGenerator
-            from layout_optimizer_rules import RuleBasedLayoutOptimizer
-
-            # Build spec
+            # Build JSON spec directly (bypasses NLP model for speed/stability)
             spec = {
                 "bedrooms": self.bedrooms,
                 "bathrooms": self.bathrooms,
@@ -411,34 +641,177 @@ class ARCHITEXT_OT_GenerateQuick(Operator):
                 "garage": self.has_garage,
             }
 
-            # Generate
-            generator = BIMGenerator()
-            output_dir = os.path.join(os.path.dirname(scripts_path), "output")
+            # Add area/plot size specification
+            if self.use_area_bounds:
+                if self.area_unit == 'marla':
+                    # 1 marla = 25.2929 sqm
+                    area_sqm = self.area_value * 25.2929
+                    # Assume 1:1.5 ratio (width:depth)
+                    width = (area_sqm / 1.5) ** 0.5
+                    height = width * 1.5
+                    spec['area_bounds'] = {'width': width, 'height': height, 'area_sqm': area_sqm}
+                elif self.area_unit == 'kanal':
+                    # 1 kanal = 20 marla = 505.857 sqm
+                    area_sqm = self.area_value * 505.857
+                    width = (area_sqm / 1.5) ** 0.5
+                    height = width * 1.5
+                    spec['area_bounds'] = {'width': width, 'height': height, 'area_sqm': area_sqm}
+                elif self.area_unit == 'sqft':
+                    area_sqm = self.area_value * 0.092903
+                    width = (area_sqm / 1.5) ** 0.5
+                    height = width * 1.5
+                    spec['area_bounds'] = {'width': width, 'height': height, 'area_sqm': area_sqm}
+                elif self.area_unit == 'sqm':
+                    area_sqm = self.area_value
+                    width = (area_sqm / 1.5) ** 0.5
+                    height = width * 1.5
+                    spec['area_bounds'] = {'width': width, 'height': height, 'area_sqm': area_sqm}
+                elif self.area_unit == 'dimensions':
+                    spec['area_bounds'] = {
+                        'width': self.plot_width,
+                        'height': self.plot_height,
+                        'area_sqm': self.plot_width * self.plot_height
+                    }
+
+            # Convert spec to JSON string
+            spec_json = json.dumps(spec)
+            print(f"Spec: {spec_json}")
+
+            # Prepare output path
+            project_root = os.path.dirname(prefs.scripts_path)
+            output_dir = os.path.join(project_root, "output")
             os.makedirs(output_dir, exist_ok=True)
-            output_path = os.path.join(output_dir, "blender_quick_generated.ifc")
 
-            result = generator.generate_from_spec(spec, output_path)
+            # Call quick_generate.py (direct JSON, no NLP model)
+            quick_script = os.path.join(prefs.scripts_path, "quick_generate.py")
 
-            props.status_message = "IFC created!"
+            if not os.path.exists(quick_script):
+                self.report({'ERROR'}, f"quick_generate.py not found at {quick_script}")
+                props.status_message = "Error: quick_generate.py not found"
+                return {'CANCELLED'}
 
-            # Auto import
-            if props.auto_import and os.path.exists(output_path):
-                if props.clear_scene:
-                    bpy.ops.object.select_all(action='SELECT')
-                    bpy.ops.object.delete()
+            print(f"[OK] Using quick_generate.py (direct mode)")
 
+            # Use Popen with temp files to avoid pipe buffer issues on Windows
+            stdout_file = tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix='.txt')
+            stderr_file = tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix='.txt')
+
+            try:
+                startupinfo = None
+                creationflags = 0
+                if sys.platform == 'win32':
+                    startupinfo = subprocess.STARTUPINFO()
+                    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                    creationflags = subprocess.CREATE_NO_WINDOW
+
+                process = subprocess.Popen(
+                    [prefs.python_path, quick_script, spec_json],
+                    stdout=stdout_file,
+                    stderr=stderr_file,
+                    cwd=project_root,
+                    startupinfo=startupinfo,
+                    creationflags=creationflags
+                )
+
+                return_code = process.wait(timeout=60)  # Shorter timeout for quick mode
+
+                stdout_file.seek(0)
+                stderr_file.seek(0)
+                stdout_content = stdout_file.read()
+                stderr_content = stderr_file.read()
+
+            finally:
+                stdout_file.close()
+                stderr_file.close()
                 try:
-                    bpy.ops.bim.load_project(filepath=output_path)
-                    props.status_message = "Imported successfully!"
+                    os.unlink(stdout_file.name)
+                    os.unlink(stderr_file.name)
                 except:
-                    props.status_message = f"Saved: {output_path}"
+                    pass
 
-            self.report({'INFO'}, "Building generated!")
+            print(f"[DONE] Return code: {return_code}")
+            if stdout_content:
+                print(f"STDOUT:\n{stdout_content[-500:]}")
+
+            if return_code != 0:
+                error_msg = stderr_content[:200] if stderr_content else "Unknown error"
+                self.report({'ERROR'}, f"Generation failed: {error_msg}")
+                props.status_message = f"Error: Quick mode failed"
+                print(f"Quick Mode STDERR: {stderr_content}")
+                return {'CANCELLED'}
+
+            # Find generated IFC
+            import glob
+            import time
+
+            # Small delay to ensure file is fully written
+            time.sleep(0.5)
+
+            ifc_files = glob.glob(os.path.join(output_dir, "*.ifc"))
+            if ifc_files:
+                ifc_path = max(ifc_files, key=os.path.getmtime)
+                print(f"[Quick Mode] Generated: {ifc_path}")
+
+                # Validate file exists and has content
+                if not os.path.exists(ifc_path):
+                    print(f"[Quick Mode] ERROR: File not found: {ifc_path}")
+                    props.status_message = "Error: IFC file not found"
+                    return {'CANCELLED'}
+
+                file_size = os.path.getsize(ifc_path)
+                print(f"[Quick Mode] File size: {file_size} bytes")
+                if file_size < 1000:  # IFC files should be at least 1KB
+                    print(f"[Quick Mode] WARNING: File seems too small, may be incomplete")
+
+                # Import with extra safety checks
+                if props.auto_import:
+                    try:
+                        if props.clear_scene:
+                            bpy.ops.object.select_all(action='SELECT')
+                            bpy.ops.object.delete()
+
+                        # Try native IFC import FIRST (more stable, less likely to crash)
+                        imported = False
+                        try:
+                            if hasattr(bpy.ops, 'import_scene') and hasattr(bpy.ops.import_scene, 'ifc'):
+                                bpy.ops.import_scene.ifc(filepath=ifc_path)
+                                imported = True
+                                print("[Quick Mode] Imported via native IFC")
+                        except Exception as e:
+                            print(f"[Quick Mode] Native IFC import failed: {e}")
+
+                        # Fallback to BlenderBIM (can crash Blender in some cases)
+                        if not imported:
+                            try:
+                                if hasattr(bpy.ops, 'bim') and hasattr(bpy.ops.bim, 'load_project'):
+                                    bpy.ops.bim.load_project(filepath=ifc_path)
+                                    imported = True
+                                    print("[Quick Mode] Imported via BlenderBIM")
+                            except Exception as e:
+                                print(f"[Quick Mode] BlenderBIM import failed: {e}")
+
+                        if not imported:
+                            print(f"[Quick Mode] Could not auto-import. File at: {ifc_path}")
+
+                    except Exception as e:
+                        print(f"[Quick Mode] Import error: {e}")
+
+                props.status_message = f"Success! {os.path.basename(ifc_path)}"
+                self.report({'INFO'}, f"Generated: {ifc_path}")
+            else:
+                props.status_message = "Generated - check output folder"
+                self.report({'INFO'}, "Building generated!")
+
+        except subprocess.TimeoutExpired:
+            self.report({'ERROR'}, "Generation timed out")
+            props.status_message = "Error: Timeout"
+            return {'CANCELLED'}
 
         except Exception as e:
-            props.status_message = f"Error: {str(e)}"
             self.report({'ERROR'}, str(e))
+            props.status_message = f"Error: {str(e)[:50]}"
             return {'CANCELLED'}
+
         finally:
             props.is_generating = False
 
@@ -465,8 +838,8 @@ class ARCHITEXT_OT_LoadExample(Operator):
         examples = {
             'small': "Compact 2 bedroom house with 1 bathroom, open kitchen and living area",
             'family': "Modern 3 bedroom family house with 2 bathrooms, kitchen, dining room, and spacious living room",
-            'luxury': "Luxury 4 bedroom villa with master suite, 3 bathrooms, study, open plan kitchen-dining, large living room, and home gym",
-            'apartment': "Contemporary 1 bedroom apartment with bathroom, combined kitchen-living area, and small study nook",
+            'luxury': "Luxury 4 bedroom villa with master suite, 3 bathrooms, study, open plan kitchen-dining, large living room",
+            'apartment': "Contemporary 1 bedroom apartment with bathroom, combined kitchen-living area",
         }
 
         props.prompt = examples.get(self.example, examples['family'])
@@ -480,18 +853,24 @@ class ARCHITEXT_OT_OpenOutput(Operator):
 
     def execute(self, context):
         prefs = context.preferences.addons[__name__].preferences
-        scripts_path = prefs.scripts_path
 
-        if scripts_path:
-            output_dir = os.path.join(os.path.dirname(scripts_path), "output")
+        if prefs.scripts_path:
+            output_dir = os.path.join(os.path.dirname(prefs.scripts_path), "output")
         else:
-            output_dir = os.path.join(os.path.dirname(__file__), "..", "..", "output")
+            self.report({'WARNING'}, "Scripts path not configured")
+            return {'CANCELLED'}
 
         if os.path.exists(output_dir):
-            import subprocess
-            subprocess.Popen(f'explorer "{output_dir}"')
+            # Cross-platform folder open
+            if sys.platform == 'win32':
+                os.startfile(output_dir)
+            elif sys.platform == 'darwin':
+                subprocess.run(['open', output_dir])
+            else:
+                subprocess.run(['xdg-open', output_dir])
         else:
-            self.report({'WARNING'}, "Output folder not found")
+            os.makedirs(output_dir, exist_ok=True)
+            self.report({'INFO'}, f"Created output folder: {output_dir}")
 
         return {'FINISHED'}
 
@@ -516,7 +895,7 @@ class ARCHITEXT_PT_MainPanel(Panel):
         layout = self.layout
         props = context.scene.architext
 
-        # Header with logo/title
+        # Header
         box = layout.box()
         row = box.row()
         row.scale_y = 1.5
@@ -536,13 +915,11 @@ class ARCHITEXT_PT_TextInput(Panel):
         layout = self.layout
         props = context.scene.architext
 
-        # Text input area
         box = layout.box()
         col = box.column(align=True)
         col.scale_y = 1.2
         col.prop(props, "prompt", text="")
 
-        # Example prompts dropdown
         row = box.row(align=True)
         row.label(text="Examples:", icon='PRESET')
         row.operator_menu_enum("architext.load_example", "example", text="Load", icon='DOWNARROW_HLT')
@@ -561,7 +938,6 @@ class ARCHITEXT_PT_Generate(Panel):
         layout = self.layout
         props = context.scene.architext
 
-        # Main generate button
         col = layout.column(align=True)
         col.scale_y = 2.0
 
@@ -571,7 +947,6 @@ class ARCHITEXT_PT_Generate(Panel):
         else:
             col.operator("architext.generate", text="Generate Building", icon='PLAY')
 
-        # Quick generate
         row = layout.row()
         row.scale_y = 1.3
         row.operator("architext.generate_quick", text="Quick Mode", icon='CON_SPLINEIK')
@@ -581,7 +956,7 @@ class ARCHITEXT_PT_Generate(Panel):
         row = box.row()
         if "Error" in props.status_message:
             row.label(text=props.status_message, icon='ERROR')
-        elif "success" in props.status_message.lower() or "imported" in props.status_message.lower():
+        elif "Success" in props.status_message:
             row.label(text=props.status_message, icon='CHECKMARK')
         else:
             row.label(text=props.status_message, icon='INFO')
@@ -601,15 +976,13 @@ class ARCHITEXT_PT_Settings(Panel):
         layout = self.layout
         props = context.scene.architext
 
-        # Building settings
         box = layout.box()
         box.label(text="Building Settings", icon='SETTINGS')
         col = box.column(align=True)
         col.prop(props, "wall_height")
         col.prop(props, "wall_thickness")
-        col.prop(props, "style_preset")
+        # Note: style_preset removed from UI - not yet implemented
 
-        # Import settings
         box = layout.box()
         box.label(text="Import Options", icon='IMPORT')
         col = box.column(align=True)
@@ -629,9 +1002,9 @@ class ARCHITEXT_PT_Tools(Panel):
 
     def draw(self, context):
         layout = self.layout
-
         col = layout.column(align=True)
         col.operator("architext.open_output", text="Open Output Folder", icon='FILE_FOLDER')
+        col.operator("architext.test_config", text="Test Configuration", icon='CHECKMARK')
 
 
 # ============================================================================
@@ -641,6 +1014,8 @@ class ARCHITEXT_PT_Tools(Panel):
 classes = (
     ARCHITEXT_Properties,
     ARCHITEXT_Preferences,
+    ARCHITEXT_OT_AutoDetectPaths,
+    ARCHITEXT_OT_TestConfig,
     ARCHITEXT_OT_Generate,
     ARCHITEXT_OT_GenerateQuick,
     ARCHITEXT_OT_LoadExample,
@@ -656,18 +1031,14 @@ classes = (
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
-
     bpy.types.Scene.architext = PointerProperty(type=ARCHITEXT_Properties)
-
     print("ArchiText add-on registered successfully!")
 
 
 def unregister():
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
-
     del bpy.types.Scene.architext
-
     print("ArchiText add-on unregistered.")
 
 

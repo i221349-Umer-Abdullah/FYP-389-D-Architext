@@ -57,6 +57,7 @@ import ifcopenshell.api
 import ifcopenshell.geom
 
 from layout_optimizer_rules import RuleBasedLayoutOptimizer
+from graph_layout_optimizer import GraphLayoutOptimizer
 
 
 # =============================================================================
@@ -710,23 +711,37 @@ class BIMGenerator:
         has_dining_room = metadata.get("dining_room", False) or any(r.get("type") == "dining_room" for r in rooms_list)
         has_study = metadata.get("study", False) or any(r.get("type") == "study" for r in rooms_list)
         
-        # Use rule-based layout optimizer for intelligent room placement
-        print("Optimizing room layout...")
-        optimizer = RuleBasedLayoutOptimizer()
-        rooms = optimizer.optimize_layout(metadata)
+        # Check for area bounds in spec
+        area_bounds = spec.get('area_bounds', None)
 
-        print(f"Generated layout with {len(rooms)} rooms")
+        # Use graph-based layout optimizer for connected room placement
+        print("Optimizing room layout with graph-based optimizer...")
+        optimizer = GraphLayoutOptimizer()
 
-        # Create rooms with optimized positions
+        # If area bounds specified, configure optimizer for bounded generation
+        if area_bounds:
+            plot_width = area_bounds.get('width', 15)
+            plot_height = area_bounds.get('height', 20)
+            print(f"Constraining to plot: {plot_width:.1f}m x {plot_height:.1f}m ({area_bounds.get('area_sqm', 0):.1f} sqm)")
+            graph, rooms = optimizer.optimize_layout(metadata, max_width=plot_width, max_height=plot_height)
+        else:
+            graph, rooms = optimizer.optimize_layout(metadata)
+
+        # Get layout info for logging
+        info = optimizer.get_layout_info()
+        print(f"Generated layout: {info['num_rooms']} rooms, {info['num_connections']} connections")
+        print(f"Total area: {info['total_area']:.1f} sqm, Bounds: {info['bounds']}")
+
+        # Create rooms with optimized positions (connected layout)
         for room in rooms:
             self.create_simple_room(
-                room.name,
+                room.id,  # Use room ID as name
                 room.width,
                 room.height,
                 x_offset=room.x,
                 y_offset=room.y
             )
-            print(f"  Created {room.name}: {room.width}x{room.height}m at ({room.x:.1f}, {room.y:.1f})")
+            print(f"  Created {room.id} ({room.room_type}): {room.width}x{room.height}m at ({room.x:.1f}, {room.y:.1f})")
         
         # Save IFC file
         if output_path is None:

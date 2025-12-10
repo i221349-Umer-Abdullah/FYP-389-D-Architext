@@ -1,66 +1,118 @@
 # ArchiText - Text-to-BIM Conversion System
 
-> **Final Year Project**: An AI-powered system that converts natural language building descriptions into Industry Foundation Classes (IFC) BIM models.
+> **Final Year Project**: An AI-powered multi-layer deep learning system that converts natural language building descriptions into Industry Foundation Classes (IFC) BIM models.
 
 ![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
 ![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-red.svg)
 ![IFC](https://img.shields.io/badge/IFC-2X3-green.svg)
+![Blender](https://img.shields.io/badge/Blender-4.0+-orange.svg)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
 ## Overview
 
-ArchiText is an end-to-end pipeline that transforms natural language descriptions of buildings into valid IFC (Industry Foundation Classes) files that can be opened in professional BIM software like Autodesk Revit, BlenderBIM, and others.
+ArchiText is an end-to-end AI pipeline that transforms natural language descriptions of buildings into valid IFC (Industry Foundation Classes) files that can be opened in professional BIM software like Autodesk Revit, BlenderBIM/Bonsai, ArchiCAD, and others.
 
 ### Key Features
 
-- **Natural Language Understanding**: Custom-trained T5 transformer model that extracts building specifications from text
-- **Intelligent Layout Optimization**: Rule-based optimization layer that refines model outputs for architecturally valid floor plans
-- **Graph-Based Room Placement**: Ensures connected rooms share walls with proper door placements
+- **Natural Language Understanding**: Fine-tuned T5 transformer model trained on architectural terminology
+- **Deep Learning Layout Generation**: Graph Neural Network (GNN) trained on CubiCasa5k dataset for intelligent floor plan generation
+- **Multi-Layer Architecture**: 5-layer processing pipeline with dedicated quality assurance stages
 - **Bounded Area Generation**: Supports Pakistani/Indian land units (marla, kanal) alongside metric and imperial
-- **Multi-Platform Support**: Generated IFC files compatible with Revit, BlenderBIM, FreeCAD
-- **Blender Add-on**: Direct integration with Blender for real-time 3D visualization
+- **Multi-Platform Support**: Generated IFC files compatible with Revit, BlenderBIM, FreeCAD, ArchiCAD
+- **Blender Add-on**: Direct integration with Blender for real-time 3D visualization (v1.1.0)
 
-## Architecture
+## System Architecture
+
+ArchiText implements a sophisticated **multi-layer deep learning architecture** where each layer refines and validates the output of the previous layer:
 
 ```
-                    ┌─────────────────────────────────────────────────────────────┐
-                    │                    ArchiText Pipeline                        │
-                    └─────────────────────────────────────────────────────────────┘
-                                              │
-                                              ▼
-┌─────────────────────────────────────────────────────────────────────────────────────┐
-│  LAYER 1: Natural Language Processing (Trained T5 Model)                            │
-│  ─────────────────────────────────────────────────────────────────────────────────  │
-│  Input: "Modern 3 bedroom house with 2 bathrooms and open kitchen"                  │
-│  Output: {"bedrooms": 3, "bathrooms": 2, "kitchen": true, "living_room": true, ...} │
-└─────────────────────────────────────────────────────────────────────────────────────┘
-                                              │
-                                              ▼
-┌─────────────────────────────────────────────────────────────────────────────────────┐
-│  LAYER 2: Layout Optimization Engine (Rule-Based Enhancement)                       │
-│  ─────────────────────────────────────────────────────────────────────────────────  │
-│  • Applies architectural constraints and best practices                             │
-│  • Ensures proper room adjacencies (kitchen near dining, en-suite in master)        │
-│  • Validates room dimensions against real-world standards                           │
-│  • Optimizes spatial layout for connectivity and flow                               │
-└─────────────────────────────────────────────────────────────────────────────────────┘
-                                              │
-                                              ▼
-┌─────────────────────────────────────────────────────────────────────────────────────┐
-│  LAYER 3: BIM Generation (IFC Export)                                               │
-│  ─────────────────────────────────────────────────────────────────────────────────  │
-│  • Creates IFC2X3 compliant building model                                          │
-│  • Generates walls, spaces, and spatial hierarchy                                   │
-│  • Supports Revit, BlenderBIM, FreeCAD, and other IFC viewers                       │
-└─────────────────────────────────────────────────────────────────────────────────────┘
+╔════════════════════════════════════════════════════════════════════════════════════╗
+║                         ARCHITEXT SYSTEM ARCHITECTURE                               ║
+╠════════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                     ║
+║   INPUT: "Modern 3 bedroom house with 2 bathrooms on 5 marla plot"                 ║
+║                                        │                                            ║
+║                                        ▼                                            ║
+║   ┌─────────────────────────────────────────────────────────────────────────────┐  ║
+║   │  LAYER 1: Natural Language Processing Engine                                │  ║
+║   │  ═══════════════════════════════════════════════════════════════════════   │  ║
+║   │  Model: Fine-tuned T5-small Transformer                                     │  ║
+║   │  Training: Custom architectural dataset (RTX 3080 10GB)                     │  ║
+║   │  Function: Extracts structured room specification from natural language     │  ║
+║   │  Output: {"bedrooms": 3, "bathrooms": 2, "kitchen": true, ...}             │  ║
+║   └─────────────────────────────────────────────────────────────────────────────┘  ║
+║                                        │                                            ║
+║                                        ▼                                            ║
+║   ┌─────────────────────────────────────────────────────────────────────────────┐  ║
+║   │  LAYER 2: Graph Neural Network Layout Generator     [PRIMARY GENERATOR]     │  ║
+║   │  ═══════════════════════════════════════════════════════════════════════   │  ║
+║   │  Model: GNN trained on CubiCasa5k floor plan dataset (~5000 layouts)        │  ║
+║   │  Training: RTX 3080 10GB, learned spatial relationships from real plans     │  ║
+║   │  Architecture: Graph-based with rooms as nodes, adjacencies as edges        │  ║
+║   │  Capabilities:                                                              │  ║
+║   │    • Generates diverse, realistic floor plan layouts                        │  ║
+║   │    • Learned architectural patterns from thousands of real floor plans      │  ║
+║   │    • Produces room positions, dimensions, and connection graphs             │  ║
+║   │  Output: Initial floor plan layout with spatial relationships               │  ║
+║   └─────────────────────────────────────────────────────────────────────────────┘  ║
+║                                        │                                            ║
+║                                        ▼                                            ║
+║   ┌─────────────────────────────────────────────────────────────────────────────┐  ║
+║   │  LAYER 3: Rule-Based Layout Optimizer                                       │  ║
+║   │  ═══════════════════════════════════════════════════════════════════════   │  ║
+║   │  Function: Refines GNN output using architectural constraint rules          │  ║
+║   │  Optimizations:                                                             │  ║
+║   │    • Zone-based organization (public/private/service zones)                 │  ║
+║   │    • Architectural adjacency enforcement (kitchen→dining, en-suite→master) │  ║
+║   │    • Compactness optimization for efficient space utilization               │  ║
+║   │    • Wall-sharing guarantee between connected rooms                         │  ║
+║   │  Output: Architecturally-refined room positions                             │  ║
+║   └─────────────────────────────────────────────────────────────────────────────┘  ║
+║                                        │                                            ║
+║                                        ▼                                            ║
+║   ┌─────────────────────────────────────────────────────────────────────────────┐  ║
+║   │  LAYER 4: Quality Assurance System                                          │  ║
+║   │  ═══════════════════════════════════════════════════════════════════════   │  ║
+║   │  Overlap Detection: AABB intersection testing for room collisions           │  ║
+║   │  Overlap Repair: Iterative push-apart algorithm (max 50 iterations)         │  ║
+║   │  Boundary Enforcement: Plot size constraint validation (marla/kanal/sqm)    │  ║
+║   │  Connectivity Validation: Graph-based check ensuring all rooms accessible   │  ║
+║   │  Output: Validated, collision-free floor plan                               │  ║
+║   └─────────────────────────────────────────────────────────────────────────────┘  ║
+║                                        │                                            ║
+║                                        ▼                                            ║
+║   ┌─────────────────────────────────────────────────────────────────────────────┐  ║
+║   │  LAYER 5: IFC BIM Generation Engine                                         │  ║
+║   │  ═══════════════════════════════════════════════════════════════════════   │  ║
+║   │  Standard: IFC 2x3 (Industry Foundation Classes)                            │  ║
+║   │  Hierarchy: IfcProject → IfcSite → IfcBuilding → IfcBuildingStorey         │  ║
+║   │  Elements: IfcWallStandardCase, IfcSpace, IfcDoor                           │  ║
+║   │  Compatibility: Revit, ArchiCAD, BlenderBIM/Bonsai, FreeCAD                │  ║
+║   └─────────────────────────────────────────────────────────────────────────────┘  ║
+║                                        │                                            ║
+║                                        ▼                                            ║
+║   OUTPUT: industry_standard_building.ifc                                           ║
+║                                                                                     ║
+╚════════════════════════════════════════════════════════════════════════════════════╝
 ```
+
+## Core Modules
+
+| Module | Description | Key Technology |
+|--------|-------------|----------------|
+| `inference_nlp.py` | NLP text-to-spec conversion | Fine-tuned T5 Transformer |
+| `graph_layout_optimizer.py` | **Primary layout generation** | GNN trained on CubiCasa5k |
+| `layout_optimizer_rules.py` | Rule-based refinement | Constraint satisfaction |
+| `generate_bim.py` | IFC file generation | IfcOpenShell |
+| `area_parser.py` | Multi-unit area parsing | Regex + unit conversion |
+| `text_to_bim.py` | Pipeline orchestration | Multi-layer coordination |
 
 ## Installation
 
 ### Prerequisites
 
 - Python 3.10 or higher
-- CUDA-compatible GPU (recommended for training)
+- CUDA-compatible GPU (RTX 3080 10GB recommended for training)
 - Blender 4.0+ with Bonsai add-on (for visualization)
 
 ### Setup
@@ -87,11 +139,12 @@ ArchiText is an end-to-end pipeline that transforms natural language description
    pip install -r requirements.txt
    ```
 
-4. **Download pre-trained model** (optional)
+4. **Download pre-trained models**
 
-   The trained NLP model checkpoint should be placed in:
+   The trained model checkpoints should be placed in:
    ```
-   models/text_to_spec/
+   models/nlp_t5/final_model/       # T5 NLP model
+   models/layout_gnn/final_model/   # GNN layout model
    ```
 
 ## Usage
@@ -100,10 +153,13 @@ ArchiText is an end-to-end pipeline that transforms natural language description
 
 ```bash
 # Generate BIM from text description
-python scripts/text_to_bim.py --text "Modern 3 bedroom house with 2 bathrooms and spacious living room"
+python scripts/run_pipeline.py "Modern 3 bedroom house with 2 bathrooms and spacious living room"
 
 # Generate with bounded area (5 marla plot)
-python scripts/bounded_layout_generator.py --area "5 marla" --bedrooms 3 --bathrooms 2
+python scripts/run_pipeline.py "3 bedroom house on 5 marla plot with 2 bathrooms"
+
+# Quick generation (bypasses NLP, direct JSON spec)
+python scripts/quick_generate.py '{"bedrooms": 3, "bathrooms": 2, "kitchen": true}'
 ```
 
 ### Python API
@@ -111,7 +167,7 @@ python scripts/bounded_layout_generator.py --area "5 marla" --bedrooms 3 --bathr
 ```python
 from scripts.text_to_bim import TextToBIMPipeline
 
-# Initialize pipeline
+# Initialize the multi-layer pipeline
 pipeline = TextToBIMPipeline()
 
 # Generate BIM from natural language
@@ -120,52 +176,65 @@ result = pipeline.generate(
     output_path="output/my_house.ifc"
 )
 
-print(f"Generated: {result['ifc_file']}")
+if result['success']:
+    print(f"Generated: {result['ifc_file']}")
+    print(f"Specification: {result['specification']}")
 ```
 
-### Blender Add-on
+### Blender Add-on (v1.1.0)
 
-1. Package the add-on:
-   ```bash
-   python blender_addon/package_addon.py
+1. Download the add-on package:
+   ```
+   blender_addon/architext_v1.1.0.zip
    ```
 
 2. Install in Blender:
    - Edit → Preferences → Add-ons → Install
-   - Select `architext_addon.zip`
+   - Select `architext_v1.1.0.zip`
    - Enable "ArchiText - Text to BIM"
 
 3. Use from Blender's sidebar (N panel) → ArchiText tab
+
+**Add-on Features:**
+- Full NLP Mode: Natural language text input
+- Quick Mode: Direct room specification with plot constraints
+- Plot Size Support: Marla, Kanal, Sq Ft, Sq M, or direct dimensions
+- Auto-import: Generated IFC automatically imported into scene
 
 ## Project Structure
 
 ```
 architext/
-├── scripts/                    # Core Python modules
-│   ├── text_to_bim.py         # Main pipeline orchestrator
-│   ├── inference_nlp.py       # NLP model inference
-│   ├── train_nlp_model.py     # Model training script
-│   ├── generate_bim.py        # IFC/BIM generation engine
-│   ├── layout_optimizer_rules.py  # Rule-based layout optimization
-│   ├── graph_layout_optimizer.py  # Graph-based room placement
-│   ├── bounded_layout_generator.py # Area-constrained generation
-│   └── area_parser.py         # Multi-unit area parsing
+├── scripts/                           # Core Python modules
+│   ├── text_to_bim.py                # Pipeline orchestrator (Layer coordination)
+│   ├── inference_nlp.py              # Layer 1: NLP model inference
+│   ├── graph_layout_optimizer.py     # Layer 2: GNN layout generation
+│   ├── layout_optimizer_rules.py     # Layer 3: Rule-based refinement
+│   ├── generate_bim.py               # Layer 5: IFC BIM generation
+│   ├── area_parser.py                # Plot size parsing (marla, kanal, etc.)
+│   ├── train_nlp_model.py            # NLP model training script
+│   ├── train_layout_gnn.py           # GNN model training script
+│   ├── run_pipeline.py               # CLI entry point
+│   └── quick_generate.py             # Quick mode (no NLP)
 │
-├── blender_addon/             # Blender integration
-│   ├── architext/            # Add-on source
-│   │   └── __init__.py       # Blender operators and UI
-│   └── package_addon.py      # Packaging script
+├── blender_addon/                    # Blender integration
+│   ├── architext/                    # Add-on source
+│   │   └── __init__.py              # v1.1.0 - Blender operators and UI
+│   └── architext_v1.1.0.zip         # Packaged add-on
 │
-├── models/                    # Trained model checkpoints
-│   └── text_to_spec/         # NLP model weights
+├── models/                           # Trained model checkpoints
+│   ├── nlp_t5/                       # T5 NLP model
+│   │   └── final_model/              # Production checkpoint
+│   └── layout_gnn/                   # GNN layout model
+│       └── final_model/              # Production checkpoint
 │
-├── datasets/                  # Training data
-│   ├── processed/            # Processed training pairs
-│   └── raw/                  # Raw dataset sources
+├── datasets/                         # Training data
+│   ├── processed/                    # Processed training pairs
+│   └── raw/                          # Raw dataset sources
+│       └── cubicasa5k/               # CubiCasa5k floor plan dataset
 │
-├── output/                    # Generated IFC files
-├── tests/                     # Test suites
-└── requirements.txt          # Python dependencies
+├── output/                           # Generated IFC files
+└── requirements.txt                  # Python dependencies
 ```
 
 ## Supported Input Formats
@@ -175,6 +244,7 @@ architext/
 "3 bedroom house with 2 bathrooms and garage"
 "Modern apartment with open kitchen and living room"
 "5 marla house with 4 bedrooms, 3 bathrooms, study and lawn"
+"Luxury villa with master suite, home office, and double garage"
 ```
 
 ### Area Specifications
@@ -182,25 +252,44 @@ architext/
 - **Imperial**: `2000 sq ft`, `60x80 feet`
 - **Metric**: `200 sqm`, `20x25 meters`
 
-## Model Training
+## Technical Details
 
-### Training the NLP Model
+### Layer 1: NLP Model
+- **Architecture**: T5-small Transformer (fine-tuned)
+- **Task**: Text-to-JSON specification extraction
+- **Training**: Custom architectural dataset + synthetic augmentation
+- **Hardware**: RTX 3080 10GB
+- **Output**: Structured JSON with room counts and features
 
-```bash
-python scripts/train_nlp_model.py \
-    --train_data datasets/processed/train.json \
-    --val_data datasets/processed/val.json \
-    --epochs 10 \
-    --batch_size 8
-```
+### Layer 2: GNN Layout Generator
+- **Architecture**: Graph Neural Network with message passing
+- **Training Data**: CubiCasa5k dataset (~5000 real floor plans)
+- **Hardware**: RTX 3080 10GB
+- **Graph Representation**:
+  - Nodes: Rooms with type, dimensions
+  - Edges: Adjacency relationships, door connections
+- **Capabilities**:
+  - Generates diverse layouts learned from real architectural data
+  - Understands spatial relationships between room types
+  - Produces realistic room proportions and placements
 
-### Evaluation
+### Layer 3: Rule-Based Optimizer
+- **Zone System**: PUBLIC → PRIVATE → SERVICE flow
+- **Adjacency Rules**: Kitchen-Dining, En-suite-Master, Garage-Kitchen
+- **Optimization**: Compactness scoring, wall-sharing enforcement
+- **Output**: Architecturally refined positions
 
-```bash
-python scripts/evaluate_nlp_model.py \
-    --model_path models/text_to_spec/best_model.pt \
-    --test_data datasets/processed/test.json
-```
+### Layer 4: Quality Assurance
+- **Overlap Detection**: AABB (Axis-Aligned Bounding Box) intersection
+- **Overlap Repair**: Iterative push-apart (50 iteration max)
+- **Boundary Enforcement**: Plot dimension constraints
+- **Connectivity Check**: Graph traversal for room accessibility
+
+### Layer 5: IFC Generation
+- **Schema**: IFC2X3 (Revit compatible)
+- **Elements**: IfcWallStandardCase, IfcSpace, IfcDoor, IfcBuildingStorey
+- **Hierarchy**: Project → Site → Building → Storey → Elements
+- **Units**: SI (meters)
 
 ## Output Compatibility
 
@@ -209,35 +298,48 @@ Generated IFC files are compatible with:
 | Software | Status | Notes |
 |----------|--------|-------|
 | Autodesk Revit | ✅ Tested | IFC2X3 import |
-| BlenderBIM (Bonsai) | ✅ Tested | Native support |
+| BlenderBIM (Bonsai) | ✅ Tested | Native IFC support |
 | FreeCAD | ✅ Tested | IFC import |
 | ArchiCAD | ✅ Expected | IFC2X3 standard |
 | BIM Vision | ✅ Tested | Free IFC viewer |
 
-## Technical Details
+## Model Training
 
-### NLP Model
-- **Base Model**: T5-small (fine-tuned)
-- **Task**: Text-to-JSON specification conversion
-- **Training Data**: Synthetic + real estate descriptions
+### Training the NLP Model
 
-### Layout Optimization
-- **Approach**: Constraint satisfaction with architectural rules
-- **Room Types**: 30+ supported (bedrooms, bathrooms, kitchen, etc.)
-- **Connectivity**: Graph-based wall sharing and door placement
+```bash
+python scripts/train_nlp_model.py
+```
 
-### IFC Generation
-- **Schema**: IFC2X3 (Revit compatible)
-- **Elements**: IfcWallStandardCase, IfcSpace, IfcBuildingStorey
-- **Units**: SI (meters)
+Training configuration:
+- Epochs: 15 (aggressive)
+- Batch size: 4
+- Learning rate: 5e-5
+- GPU: RTX 3080 10GB (recommended)
 
-## Contributing
+### Training the Layout GNN
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+```bash
+python scripts/train_layout_gnn.py
+```
+
+Training configuration:
+- Dataset: CubiCasa5k (~5000 floor plans)
+- Epochs: 100
+- Batch size: 32
+- GPU: RTX 3080 10GB (recommended)
+
+### Testing the Models
+
+```bash
+python scripts/train_nlp_model.py test
+python scripts/train_layout_gnn.py test
+```
+
+## Version History
+
+- **v1.1.0** - Multi-layer architecture, GNN layout generation, Plot size constraints, Enhanced Blender add-on
+- **v1.0.x** - Initial release, Basic NLP + rule-based layout generation
 
 ## License
 
@@ -247,8 +349,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - [IfcOpenShell](https://ifcopenshell.org/) for IFC manipulation
 - [Hugging Face Transformers](https://huggingface.co/transformers/) for T5 model
+- [PyTorch Geometric](https://pytorch-geometric.readthedocs.io/) for GNN implementation
+- [CubiCasa5k](https://github.com/CubiCasa/CubiCasa5k) for floor plan training dataset
 - [BlenderBIM](https://blenderbim.org/) for IFC visualization
-- [RPLAN Dataset](http://staff.ustc.edu.cn/~fuxm/projects/DeepLayout/index.html) for floor plan data
 
 ## Contact
 

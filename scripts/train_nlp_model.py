@@ -309,7 +309,7 @@ def test_model(model_dir: str, test_text: str):
 
 if __name__ == "__main__":
     import sys
-    
+
     # Check if we're training or testing
     if len(sys.argv) > 1 and sys.argv[1] == "test":
         # Test mode
@@ -321,12 +321,28 @@ if __name__ == "__main__":
         print("=" * 60)
         print("NLP Model Training - Text to Spec Conversion")
         print("=" * 60)
-        
+
+        # Check for custom training data path (set by overnight_train.py)
+        default_data = "datasets/processed/text_pairs/text_pairs.jsonl"
+        training_data = os.environ.get("ARCHITEXT_TRAIN_DATA", default_data)
+
+        # Check for combined Gemini data
+        if not Path(training_data).exists():
+            gemini_data = "datasets/processed/combined_gemini_train.jsonl"
+            if Path(gemini_data).exists():
+                training_data = gemini_data
+                print(f"Using Gemini-generated training data")
+
+        print(f"Training data: {training_data}")
+
+        # Use more epochs for overnight training if data is large
+        num_epochs = int(os.environ.get("ARCHITEXT_EPOCHS", "5"))
+
         trainer = train_nlp_model(
-            text_pairs_file="datasets/processed/text_pairs/text_pairs.jsonl",
+            text_pairs_file=training_data,
             model_name="t5-small",  # ~60MB model
             output_dir="models/nlp_t5",
-            num_epochs=3,
+            num_epochs=num_epochs,
             batch_size=4,
             learning_rate=5e-5
         )

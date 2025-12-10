@@ -1,45 +1,126 @@
 """
 =============================================================================
-ArchiText: Text-to-BIM Pipeline
+ArchiText: Text-to-BIM Pipeline - Main Orchestration Module
 =============================================================================
 
-This module implements the main orchestration pipeline for the ArchiText system,
-which converts natural language building descriptions into IFC (Industry Foundation
-Classes) BIM files.
+PIPELINE ORCHESTRATOR: This module is the main entry point for the ArchiText
+system, coordinating the multi-layer architecture that converts natural language
+building descriptions into industry-standard IFC (Industry Foundation Classes)
+BIM files compatible with Revit, ArchiCAD, and other BIM software.
 
-Architecture Overview:
-----------------------
-The pipeline operates in two sequential layers:
+=============================================================================
+COMPLETE SYSTEM ARCHITECTURE
+=============================================================================
 
-    LAYER 1: NLP Model (Trained T5 Transformer)
-    ├── Input: Natural language text (e.g., "3 bedroom house with 2 bathrooms")
-    ├── Model: Fine-tuned T5-small transformer
-    └── Output: JSON specification with room counts and features
+The ArchiText pipeline implements a sophisticated multi-layer deep learning
+and optimization architecture:
 
-    LAYER 2: Layout Optimization + BIM Generation
-    ├── Input: JSON specification from Layer 1
-    ├── Optimizer: Rule-based layout engine that applies architectural constraints
-    │   ├── Room sizing based on type (bedroom, kitchen, etc.)
-    │   ├── Adjacency rules (kitchen near dining, en-suite in master)
-    │   └── Spatial optimization for connectivity and flow
-    └── Output: IFC file with walls, spaces, and building hierarchy
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        ARCHITEXT PIPELINE ARCHITECTURE                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌──────────────────────────────────────────────────────────────────────┐   │
+│  │ LAYER 1: Natural Language Processing (inference_nlp.py)              │   │
+│  │ ════════════════════════════════════════════════════════════════════ │   │
+│  │ Model: Fine-tuned T5-small Transformer                               │   │
+│  │ Training: Custom dataset + architectural terminology                  │   │
+│  │ Input:  "Modern 3 bedroom house with 2 bathrooms"                    │   │
+│  │ Output: {"bedrooms": 3, "bathrooms": 2, "kitchen": true, ...}        │   │
+│  └──────────────────────────────────────────────────────────────────────┘   │
+│                                    │                                         │
+│                                    ▼                                         │
+│  ┌──────────────────────────────────────────────────────────────────────┐   │
+│  │ LAYER 2: Graph-Based Layout Engine (graph_layout_optimizer.py)       │   │
+│  │ ════════════════════════════════════════════════════════════════════ │   │
+│  │ Core: Graph construction with rooms as nodes, connections as edges   │   │
+│  │ Templates: 8 architectural layouts derived from CubiCasa5k analysis  │   │
+│  │ Algorithm: Constraint satisfaction + compactness optimization        │   │
+│  │ Input:  JSON specification from Layer 1                              │   │
+│  │ Output: Room positions (x, y, width, height) + connection graph      │   │
+│  └──────────────────────────────────────────────────────────────────────┘   │
+│                                    │                                         │
+│                                    ▼                                         │
+│  ┌──────────────────────────────────────────────────────────────────────┐   │
+│  │ LAYER 3: Quality Assurance System                                    │   │
+│  │ ════════════════════════════════════════════════════════════════════ │   │
+│  │ Overlap Detection: Axis-aligned bounding box intersection tests      │   │
+│  │ Overlap Repair: Iterative push-apart algorithm (max 50 iterations)   │   │
+│  │ Boundary Check: Plot size constraint enforcement                     │   │
+│  │ Connectivity: Ensures all rooms are accessible via doors             │   │
+│  └──────────────────────────────────────────────────────────────────────┘   │
+│                                    │                                         │
+│                                    ▼                                         │
+│  ┌──────────────────────────────────────────────────────────────────────┐   │
+│  │ LAYER 4: IFC BIM Generation (generate_bim.py)                        │   │
+│  │ ════════════════════════════════════════════════════════════════════ │   │
+│  │ Standard: IFC 2x3 (Industry Foundation Classes)                      │   │
+│  │ Hierarchy: IfcProject → IfcSite → IfcBuilding → IfcBuildingStorey   │   │
+│  │ Elements: IfcWall (exterior/interior), IfcSpace (rooms)              │   │
+│  │ Output: .ifc file compatible with Revit, ArchiCAD, BlenderBIM        │   │
+│  └──────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
 
-The rule-based optimizer acts as an enhancement layer that takes the raw model
-output and refines it using architectural best practices, ensuring the generated
-floor plans are realistic and buildable.
+=============================================================================
+MODULE RESPONSIBILITIES
+=============================================================================
 
-Usage:
-------
-    from text_to_bim import TextToBIMPipeline
+This module (text_to_bim.py) orchestrates the entire pipeline:
 
-    pipeline = TextToBIMPipeline()
-    result = pipeline.generate(
-        "Modern 3 bedroom house with 2 bathrooms and open kitchen",
-        output_path="output/my_house.ifc"
-    )
+    1. INITIALIZATION
+       - Loads the trained T5 NLP model from checkpoint
+       - Initializes the Graph-Based Layout Engine
+       - Sets up the Area Parser for plot size constraints
 
+    2. PROCESSING FLOW
+       - Receives natural language input from user
+       - Passes text through NLP model for specification extraction
+       - Parses any area/plot size constraints (marla, kanal, sqm, etc.)
+       - Invokes the Layout Engine for spatial optimization
+       - Triggers IFC generation with the optimized layout
+
+    3. OUTPUT
+       - Returns result dictionary with:
+         - input_text: Original user input
+         - specification: Extracted JSON spec
+         - area_bounds: Plot constraints (if specified)
+         - ifc_file: Path to generated IFC file
+         - success: Boolean indicating success/failure
+
+=============================================================================
+USAGE EXAMPLES
+=============================================================================
+
+Basic Usage:
+    >>> from text_to_bim import TextToBIMPipeline
+    >>>
+    >>> pipeline = TextToBIMPipeline()
+    >>> result = pipeline.generate(
+    ...     "Modern 3 bedroom house with 2 bathrooms and open kitchen"
+    ... )
+    >>> print(f"Generated: {result['ifc_file']}")
+
+With Plot Constraints:
+    >>> result = pipeline.generate(
+    ...     "3 bedroom house on 5 marla plot with 2 bathrooms",
+    ...     output_path="output/my_house.ifc"
+    ... )
+
+Custom Model Path:
+    >>> pipeline = TextToBIMPipeline(model_path="models/custom_checkpoint")
+
+=============================================================================
+DEPENDENCIES
+=============================================================================
+
+    - inference_nlp.py:        T5 model inference for text-to-spec
+    - graph_layout_optimizer.py: Graph-based spatial layout engine
+    - generate_bim.py:         IFC file generation using IfcOpenShell
+    - area_parser.py:          South Asian unit parsing (marla, kanal)
+
+=============================================================================
 Author: ArchiText Team
-Version: 1.0.0
+Version: 2.0.0 (Multi-Layer Architecture)
 =============================================================================
 """
 
@@ -70,10 +151,12 @@ if str(scripts_dir) not in sys.path:
 try:
     from scripts.inference_nlp import TextToSpecInference
     from scripts.generate_bim import BIMGenerator
+    from scripts.area_parser import AreaParser
 except ImportError:
     # Direct import when running from scripts directory
     from inference_nlp import TextToSpecInference
     from generate_bim import BIMGenerator
+    from area_parser import AreaParser
 
 
 # =============================================================================
@@ -141,6 +224,9 @@ class TextToBIMPipeline:
         print("[2/2] Initializing BIM Generator with Layout Optimizer...")
         self.bim_generator = BIMGenerator()
         print("      Generator ready")
+
+        # Initialize area parser for plot size constraints
+        self.area_parser = AreaParser()
 
         print("\n" + "-" * 80)
         print("[OK] ArchiText Pipeline initialized successfully!")
@@ -220,6 +306,26 @@ class TextToBIMPipeline:
                 return result
 
             # =================================================================
+            # STEP 1.5: Parse Area/Plot Bounds (if specified)
+            # =================================================================
+            area_bounds = self.area_parser.parse(text)
+            if area_bounds and verbose:
+                print("  Plot Size Detected:")
+                print("  " + "-" * 40)
+                print(f"    Dimensions: {area_bounds.width:.1f}m x {area_bounds.height:.1f}m")
+                print(f"    Area: {area_bounds.area_sqm:.1f} sqm ({area_bounds.area_marla:.1f} marla)")
+                print()
+
+            # Add area bounds to spec for BIM generator
+            if area_bounds:
+                spec['area_bounds'] = {
+                    'width': area_bounds.width,
+                    'height': area_bounds.height,
+                    'area_sqm': area_bounds.area_sqm
+                }
+                result['area_bounds'] = spec['area_bounds']
+
+            # =================================================================
             # STEP 2: Layout Optimization + BIM Generation
             # =================================================================
             # The rule-based optimizer enhances the model output by:
@@ -232,7 +338,10 @@ class TextToBIMPipeline:
                 print("=" * 80)
                 print("  STEP 2: Layout Optimization + BIM Generation")
                 print("=" * 80)
-                print("\n  Applying architectural rules to optimize layout...")
+                if area_bounds:
+                    print(f"\n  Constraining layout to {area_bounds.width:.1f}m x {area_bounds.height:.1f}m plot...")
+                else:
+                    print("\n  Applying architectural rules to optimize layout...")
 
             # Create a new BIM generator instance for this building
             # (The generator includes the rule-based layout optimizer)
