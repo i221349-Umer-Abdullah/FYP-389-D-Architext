@@ -26,24 +26,31 @@ if str(_SCRIPTS) not in sys.path:
 from backend.core.job_manager    import Job, JobStatus
 from backend.core.nlp_adapter    import get_nlp_adapter
 from backend.core.mock_gnn       import MockGNNAdapter
+from backend.core.real_gnn       import get_real_gnn
 from backend.core.spec_converter import normalise_spec
 
 IFC_OUTPUT_DIR = _ROOT / "output" / "api_generated"
 IFC_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# Shared mock GNN instance (swap for real GNN after training)
-_mock_gnn = MockGNNAdapter()
+# Shared GNN instance
+_gnn = get_real_gnn()
 
 
 def _validate_and_fix(room_graph: dict, spec: dict) -> dict:
     """
-    Layer 3 — lightweight rule-based validation.
-    Full Smart Validator to be built later; this enforces minimum viability.
+    Layer 3 — Smart Validator.
+    1. Enforce minimum room sizes.
+    2. Push overlapping rooms apart (iterative, max 25 passes).
+    3. Inject missing required room types from spec.
     """
     rooms = room_graph.get("rooms", [])
+
+    # 1. Minimum room sizes
     MIN_SIZES = {
         "bedroom": (2.5, 2.5), "bathroom": (1.5, 1.5),
         "living":  (3.0, 3.0), "kitchen":  (2.0, 2.0),
+        "balcony": (1.5, 1.5), "parking":  (2.5, 5.0),
+        "garden":  (3.0, 3.0), "storage":  (1.0, 1.0),
     }
     for r in rooms:
         rtype = r.get("type", "other")
@@ -51,8 +58,178 @@ def _validate_and_fix(room_graph: dict, spec: dict) -> dict:
         r["width"]  = max(r.get("width",  min_w), min_w)
         r["height"] = max(r.get("height", min_h), min_h)
 
+    # 2. Push-apart: iteratively resolve overlaps
+    MAX_PASSES = 25
+    PADDING    = 0.2  # gap between rooms in metres
+    for _ in range(MAX_PASSES):
+        moved = False
+        for i in range(len(rooms)):
+            for j in range(i + 1, len(rooms)):
+                a, b = rooms[i], rooms[j]
+                ax1, ax2 = a["x"], a["x"] + a["width"]
+                ay1, ay2 = a["y"], a["y"] + a["height"]
+                bx1, bx2 = b["x"], b["x"] + b["width"]
+                by1, by2 = b["y"], b["y"] + b["height"]
+                ox = min(ax2, bx2) - max(ax1, bx1)
+                oy = min(ay2, by2) - max(ay1, by1)
+                if ox <= 0 or oy <= 0:
+                    continue
+                if ox < oy:
+                    shift = (ox + PADDING) / 2.0
+                    if a["x"] < b["x"]:
+                        a["x"] = round(a["x"] - shift, 2)
+                        b["x"] = round(b["x"] + shift, 2)
+                    else:
+                        a["x"] = round(a["x"] + shift, 2)
+                        b["x"] = round(b["x"] - shift, 2)
+                else:
+                    shift = (oy + PADDING) / 2.0
+                    if a["y"] < b["y"]:
+                        a["y"] = round(a["y"] - shift, 2)
+                        b["y"] = round(b["y"] + shift, 2)
+                    else:
+                        a["y"] = round(a["y"] + shift, 2)
+                        b["y"] = round(b["y"] - shift, 2)
+                moved = True
+        if not moved:
+            break
+
+    # 3. Inject missing spec-required room types
+    present = {r["type"] for r in rooms}
+    DEFAULTS = [
+        ("bedroom",  9.0, 3.0, 3.0),
+        ("bathroom", 4.5, 1.8, 2.5),
+        ("living",  15.0, 4.0, 3.75),
+        ("kitchen",  9.0, 3.0, 3.0),
+    ]
+    max_x    = max((r["x"] + r["width"] for r in rooms), default=0.0)
+    insert_y = 0.0
+    for rtype, area, w, h in DEFAULTS:
+        if int(spec.get(rtype, 0)) > 0 and rtype not in present:
+            rooms.append({
+                "id": f"{rtype}_injected", "type": rtype,
+                "x": round(max_x + 0.5, 2), "y": round(insert_y, 2),
+                "width": w, "height": h, "area": area,
+            })
+            insert_y += h + 0.5
+
+    # 4. Connectivity enforcement — every room must share an edge with at least one other
+    if len(rooms) > 1:
+        # Build undirected adjacency graph (index-based)
+        n = len(rooms)
+        adj: list[set] = [set() for _ in range(n)]
+        for i in range(n):
+            for j in range(i + 1, n):
+                if _rooms_are_adjacent(rooms[i], rooms[j]):
+                    adj[i].add(j)
+                    adj[j].add(i)
+
+        # BFS to find all connected components
+        visited  = [False] * n
+        clusters = []
+        for start in range(n):
+            if not visited[start]:
+                queue   = [start]
+                cluster = []
+                while queue:
+                    node = queue.pop(0)
+                    if visited[node]:
+                        continue
+                    visited[node] = True
+                    cluster.append(node)
+                    queue.extend(adj[node] - set([node]))
+                clusters.append(cluster)
+
+        # Main cluster = largest component
+        main_cluster = max(clusters, key=len)
+        main_indices = set(main_cluster)
+
+        # Snap isolated rooms to the nearest room in the main cluster
+        for cluster in clusters:
+            if cluster == main_cluster:
+                continue
+            for iso_idx in cluster:
+                # Find nearest main-cluster room by centre distance
+                iso = rooms[iso_idx]
+                icx = iso["x"] + iso["width"]  / 2
+                icy = iso["y"] + iso["height"] / 2
+                best_anchor = min(
+                    main_indices,
+                    key=lambda k: (
+                        (rooms[k]["x"] + rooms[k]["width"]  / 2 - icx) ** 2 +
+                        (rooms[k]["y"] + rooms[k]["height"] / 2 - icy) ** 2
+                    )
+                )
+                _snap_to_adjacent(iso, rooms[best_anchor])
+                # Add to main cluster so subsequent rooms can snap to it
+                main_indices.add(iso_idx)
+
     room_graph["rooms"] = rooms
     return room_graph
+
+
+def _rooms_are_adjacent(a: dict, b: dict, tol: float = 0.6) -> bool:
+    """
+    Two rooms are considered adjacent if their edges are within `tol` metres
+    AND their interiors overlap in the perpendicular axis (they actually share wall).
+    """
+    ax1, ax2 = a["x"], a["x"] + a["width"]
+    ay1, ay2 = a["y"], a["y"] + a["height"]
+    bx1, bx2 = b["x"], b["x"] + b["width"]
+    by1, by2 = b["y"], b["y"] + b["height"]
+
+    # Check left/right adjacency: x-edges within tol, y-ranges overlap
+    x_close = (abs(ax2 - bx1) <= tol) or (abs(bx2 - ax1) <= tol)
+    y_overlap = min(ay2, by2) - max(ay1, by1) > 0
+    if x_close and y_overlap:
+        return True
+
+    # Check top/bottom adjacency: y-edges within tol, x-ranges overlap
+    y_close = (abs(ay2 - by1) <= tol) or (abs(by2 - ay1) <= tol)
+    x_overlap = min(ax2, bx2) - max(ax1, bx1) > 0
+    if y_close and x_overlap:
+        return True
+
+    return False
+
+
+def _snap_to_adjacent(isolated: dict, anchor: dict) -> None:
+    """
+    Move `isolated` room so it sits flush against `anchor` on the nearest side.
+    Modifies isolated room's x/y in-place.
+    """
+    ax1, ax2 = anchor["x"], anchor["x"] + anchor["width"]
+    ay1, ay2 = anchor["y"], anchor["y"] + anchor["height"]
+    ix1, ix2 = isolated["x"], isolated["x"] + isolated["width"]
+    iy1, iy2 = isolated["y"], isolated["y"] + isolated["height"]
+
+    # Find which side of anchor is closest to isolated room centre
+    icx = (ix1 + ix2) / 2
+    icy = (iy1 + iy2) / 2
+
+    dist_left  = abs(icx - ax1)
+    dist_right = abs(icx - ax2)
+    dist_top   = abs(icy - ay2)
+    dist_bot   = abs(icy - ay1)
+
+    best = min(dist_left, dist_right, dist_top, dist_bot)
+
+    if best == dist_right:
+        # Place isolated to the right of anchor
+        isolated["x"] = round(ax2 + 0.2, 2)
+        isolated["y"] = round(ay1, 2)
+    elif best == dist_left:
+        # Place isolated to the left of anchor
+        isolated["x"] = round(ax1 - isolated["width"] - 0.2, 2)
+        isolated["y"] = round(ay1, 2)
+    elif best == dist_top:
+        # Place isolated above anchor
+        isolated["y"] = round(ay2 + 0.2, 2)
+        isolated["x"] = round(ax1, 2)
+    else:
+        # Place isolated below anchor
+        isolated["y"] = round(ay1 - isolated["height"] - 0.2, 2)
+        isolated["x"] = round(ax1, 2)
 
 
 async def run_pipeline(job: Job, project_name: Optional[str] = None) -> None:
@@ -79,7 +256,7 @@ async def run_pipeline(job: Job, project_name: Optional[str] = None) -> None:
         await asyncio.sleep(0)
 
         loop       = asyncio.get_event_loop()
-        room_graph = await loop.run_in_executor(None, _mock_gnn.generate, spec)
+        room_graph = await loop.run_in_executor(None, _gnn.generate, spec)
 
         job.update(JobStatus.PROCESSING, "Layer 2 complete — room graph generated", 60)
         await asyncio.sleep(0)
