@@ -1,120 +1,144 @@
 """
 Spec Converter — bridges Layer 1 (NLP) output to Layer 2 (GNN) input.
 
-Layer 1 outputs a dict like:
-    {"unit_type": "house", "net_area": 120, "bedroom": 3, "bathroom": 2,
-     "living": 1, "kitchen": 1, "balcony": 1, ...}
-
-Layer 2 expects an 18-dimensional condition vector:
-    [unit_type_one_hot (5), net_area_norm (1), room_counts (12)]
-
-Room types order (12):  bedroom, bathroom, living, kitchen, balcony,
-                        storage, parking, garden, pool, stair, veranda, inner
-Unit types order (5):   house, apartment, villa, commercial, other
+Condition vector format (18-dim) — must EXACTLY match preprocess_dataset.py:
+  [0]     bedroom count   / 5.0
+  [1]     bathroom count  / 5.0
+  [2]     kitchen count   / 5.0
+  [3]     living_room count / 5.0
+  [4]     dining_room count / 5.0
+  [5]     balcony count   / 5.0
+  [6]     garden count    / 5.0
+  [7]     storage count   / 5.0
+  [8]     parking count   / 5.0
+  [9]     total_rooms / max_nodes (16)
+  [10]    is_apartment
+  [11]    is_house
+  [12:18] padding zeros
 """
 
 import numpy as np
 from typing import Dict, Any
 
-UNIT_TYPES  = ["house", "apartment", "villa", "commercial", "other"]
-ROOM_TYPES  = ["bedroom", "bathroom", "living", "kitchen", "balcony",
-               "storage", "parking", "garden", "pool", "stair", "veranda", "inner"]
+# ── Constants (MUST stay in sync with preprocess_dataset.py) ──────────────────
+COND_ROOM_KEYS = [
+    'bedroom', 'bathroom', 'kitchen', 'living_room',
+    'dining_room', 'balcony', 'garden', 'storage', 'parking',
+]
+MAX_ROOM_COUNT  = 5       # normaliser denominator
+MAX_NODES       = 16      # for total_rooms_norm
+CONDITION_DIM   = 18
 
-# Normalization constants (based on ResPlan dataset statistics)
-MAX_AREA        = 500.0   # m² — clamp and normalize
-MAX_ROOM_COUNT  = 8       # max reasonable count per type
+# NLP key aliases → canonical COND_ROOM_KEYS
+_NLP_ALIASES = {
+    'living':       'living_room',
+    'living room':  'living_room',
+    'drawing room': 'living_room',
+    'drawing_room': 'living_room',
+    'lounge':       'living_room',
+    'dining':       'dining_room',
+    'dining room':  'dining_room',
+    'terrace':      'balcony',
+    'veranda':      'balcony',
+    'yard':         'garden',
+    'garage':       'parking',
+    'utility':      'storage',
+    'closet':       'storage',
+    'storageroom':  'storage',
+}
 
-CONDITION_DIM   = 18      # 5 (unit) + 1 (area) + 12 (rooms)
+
+def _resolve_key(key: str) -> str:
+    """Map any NLP output key to a canonical COND_ROOM_KEY."""
+    k = key.lower().strip().replace(' ', '_')
+    return _NLP_ALIASES.get(k, _NLP_ALIASES.get(key.lower().strip(), k))
 
 
 def spec_to_condition_vector(spec: Dict[str, Any]) -> np.ndarray:
     """
     Convert NLP output spec dict → 18-dim float32 condition vector.
 
-    Args:
-        spec: Dict from NLP Layer 1 output
-
-    Returns:
-        numpy array of shape (18,), dtype float32
+    Handles both old-style NLP keys (living, veranda, stair etc.) and
+    new canonical keys (living_room, dining_room etc.) transparently.
     """
     vec = np.zeros(CONDITION_DIM, dtype=np.float32)
 
-    # ── Unit type one-hot (dims 0–4) ──────────────────────────────────────────
-    unit = str(spec.get("unit_type", "other")).lower()
-    if unit not in UNIT_TYPES:
-        unit = "other"
-    vec[UNIT_TYPES.index(unit)] = 1.0
+    # Gather all room counts, resolving aliases
+    resolved: Dict[str, int] = {}
+    for k, v in spec.items():
+        if k in ('unit_type', 'net_area'):
+            continue
+        canonical = _resolve_key(k)
+        if canonical in COND_ROOM_KEYS:
+            resolved[canonical] = resolved.get(canonical, 0) + int(v or 0)
 
-    # ── Normalised area (dim 5) ───────────────────────────────────────────────
-    area = float(spec.get("net_area", 100.0))
-    vec[5] = min(area / MAX_AREA, 1.0)
+    # Fill condition vector
+    total_rooms = 0
+    for i, key in enumerate(COND_ROOM_KEYS):
+        count = resolved.get(key, 0)
+        vec[i] = min(count / MAX_ROOM_COUNT, 1.0)
+        total_rooms += count
 
-    # ── Room counts (dims 6–17) ───────────────────────────────────────────────
-    for i, room in enumerate(ROOM_TYPES):
-        count = int(spec.get(room, 0))
-        # Also accept old-style keys (living_room, bathroom → bathroom)
-        if count == 0:
-            legacy = {"living": "living_room", "bathroom": "bathrooms",
-                      "bedroom": "bedrooms"}.get(room)
-            if legacy:
-                count = int(spec.get(legacy, 0))
-        vec[6 + i] = min(count / MAX_ROOM_COUNT, 1.0)
+    vec[9]  = min(total_rooms / MAX_NODES, 1.0)
 
+    unit = str(spec.get('unit_type', 'house')).lower()
+    vec[10] = 1.0 if 'apartment' in unit or 'flat' in unit else 0.0
+    vec[11] = 1.0 if 'house' in unit or 'villa' in unit or unit == '' else 0.0
+
+    # [12:18] stays zero (padding)
     return vec
-
-
-def condition_vector_to_spec(vec: np.ndarray) -> Dict[str, Any]:
-    """
-    Reverse: decode a condition vector back to a human-readable spec dict.
-    Useful for debugging and logging.
-    """
-    unit_idx  = int(np.argmax(vec[:5]))
-    unit_type = UNIT_TYPES[unit_idx]
-    net_area  = float(vec[5]) * MAX_AREA
-
-    spec = {
-        "unit_type": unit_type,
-        "net_area":  round(net_area, 1),
-    }
-    for i, room in enumerate(ROOM_TYPES):
-        count = round(float(vec[6 + i]) * MAX_ROOM_COUNT)
-        spec[room] = max(0, count)
-
-    return spec
 
 
 def normalise_spec(spec: Dict[str, Any]) -> Dict[str, Any]:
     """
     Fill in missing keys with sensible defaults so Layer 2 always
     receives a complete spec regardless of what Layer 1 produced.
+    Maps old-style keys (living, veranda, etc.) to canonical names.
     """
+    # Resolve sums for each canonical key
+    resolved: Dict[str, int] = {k: 0 for k in COND_ROOM_KEYS}
+    for k, v in spec.items():
+        canonical = _resolve_key(k)
+        if canonical in COND_ROOM_KEYS:
+            resolved[canonical] = max(resolved.get(canonical, 0), int(v or 0))
+
+    # Ensure living_room defaults to 1 if nothing social is present
+    if resolved.get('living_room', 0) == 0 and resolved.get('dining_room', 0) == 0:
+        resolved['living_room'] = 1
+
+    # Ensure at least 1 kitchen
+    if resolved.get('kitchen', 0) == 0:
+        resolved['kitchen'] = 1
+
     out = {
-        "unit_type": spec.get("unit_type", "house"),
-        "net_area":  float(spec.get("net_area", 100)),
-        "bedroom":   int(spec.get("bedroom", spec.get("bedrooms", 2))),
-        "bathroom":  int(spec.get("bathroom", spec.get("bathrooms", 1))),
-        "living":    int(spec.get("living",   spec.get("living_room", 1))),
-        "kitchen":   int(spec.get("kitchen",  1)),
-        "balcony":   int(spec.get("balcony",  0)),
-        "storage":   int(spec.get("storage",  0)),
-        "parking":   int(spec.get("parking",  0)),
-        "garden":    int(spec.get("garden",   0)),
-        "pool":      int(spec.get("pool",     0)),
-        "stair":     int(spec.get("stair",    0)),
-        "veranda":   int(spec.get("veranda",  0)),
-        "inner":     int(spec.get("inner",    0)),
+        'unit_type': spec.get('unit_type', 'house'),
+        'net_area':  float(spec.get('net_area', 100)),
     }
+    out.update(resolved)
     return out
 
 
-if __name__ == "__main__":
+def condition_vector_to_spec(vec: np.ndarray) -> Dict[str, Any]:
+    """Reverse: decode condition vector back to human-readable spec (for debugging)."""
+    spec = {
+        'total_rooms_norm': float(vec[9]),
+        'is_apartment': bool(vec[10] > 0.5),
+        'is_house':     bool(vec[11] > 0.5),
+    }
+    for i, key in enumerate(COND_ROOM_KEYS):
+        spec[key] = round(float(vec[i]) * MAX_ROOM_COUNT)
+    return spec
+
+
+if __name__ == '__main__':
     test = {
-        "unit_type": "house", "net_area": 150,
-        "bedroom": 3, "bathroom": 2, "living": 1, "kitchen": 1,
-        "balcony": 1, "storage": 0, "parking": 1, "garden": 1,
-        "pool": 0, "stair": 0, "veranda": 1, "inner": 1,
+        'unit_type': 'house', 'net_area': 150,
+        'bedroom': 3, 'bathroom': 2, 'living': 1, 'kitchen': 1,
+        'balcony': 1, 'dining room': 1, 'parking': 1,
     }
     vec = spec_to_condition_vector(test)
-    print(f"Condition vector (dim={len(vec)}): {vec}")
-    recovered = condition_vector_to_spec(vec)
-    print(f"Recovered spec: {recovered}")
+    print(f'Condition vector (dim={len(vec)}):')
+    for i, v in enumerate(vec):
+        label = COND_ROOM_KEYS[i] if i < len(COND_ROOM_KEYS) else f'dim{i}'
+        print(f'  [{i}] {label:15s} = {v:.3f}')
+    print(f'\nRecovered: {condition_vector_to_spec(vec)}')

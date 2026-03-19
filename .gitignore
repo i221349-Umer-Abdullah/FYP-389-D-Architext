@@ -12,3 +12,6 @@ models/
 *.pt
 *.ifc
 .vscode/
+nul
+data/layout_training/
+data/nlp_training/
