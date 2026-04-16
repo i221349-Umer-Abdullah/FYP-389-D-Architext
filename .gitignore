@@ -15,3 +15,8 @@ models/
 nul
 data/layout_training/
 data/nlp_training/
+data/processed/
+data/processed_v2/
+data/processed_v3/
+*.pkl
+*.npy

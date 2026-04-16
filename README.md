@@ -222,4 +222,29 @@ python scripts/generate_resplan_training_data.py 3000
 
 ---
 
+## Current Status (as of March 2026 — where to resume)
+
+### What has actually been built and works end-to-end
+- **Full 4-layer API pipeline** is running (`uvicorn backend.main:app --port 8000`). User types a prompt → NLP extracts a spec → GNN generates a room graph → Validator fixes overlaps/missing rooms → IFC file exported.
+- **Layer 1 (NLP):** T5-small fine-tuned model, deployed and working.
+- **Layer 3 (Validator):** Push-apart overlap resolver + required-room-type injector, both implemented in `backend/core/pipeline.py`.
+- **Layer 4 (IFC export):** Working, outputs valid `.ifc` files openable in BlenderBIM.
+
+### What is broken / not yet trained correctly
+- **Layer 2 (GNN) — the core problem.** The current model at `models/resplan_gnn/gnn_best.pt` was **never trained on ResPlan**. It was accidentally trained on a CubiCasa-derived JSON dataset (`data/layout_training/cubicasa_train_full.json`), which is why floor plan outputs look wrong (rooms scattered, wrong counts, no real spatial layout).
+
+### What we have just done (the fix)
+- Discovered the mismatch: `ResPlan.pkl` (17,000 samples, `D:\Work\Uni\FYP\Dataset\ResPlan\`) was sitting unused.
+- Wrote `scripts/preprocess_resplan.py` — reads actual ResPlan.pkl, extracts Shapely polygon geometry, normalises positions per-plan using the `inner` building footprint, uses the dataset's pre-built NetworkX adjacency graph. Outputs batches to `data/processed_v2/`.
+- Wrote `scripts/gnn_train_v2.py` — same GNN architecture but with 4 loss terms (adjacency + type + **spatial MSE** + num_nodes). Spatial MSE was the critical missing piece before.
+- Also fixed `backend/core/spec_converter.py` — it was building the wrong condition vector format, so the model was receiving meaningless input at inference time.
+
+### What still needs to happen
+1. **Run training** (start with `.\venv\Scripts\python.exe scripts\gnn_train_v2.py`, trains for 300 epochs, ~2–3 hours on GPU, saves best model to `models/resplan_gnn/gnn_best_v2.pt`)
+2. **Update inference decoder** (`backend/core/real_gnn.py`) to load `gnn_best_v2.pt` with `canvas_metres=12.8` from `norm_constants.npy`
+3. **Test end-to-end** with `python C:\tmp\test_api.py "3 bedroom house..."` and check `C:\tmp\floorplan_preview.png`
+4. If outputs are still not realistic enough → consider fine-tuning on RPLAN or CubiCasa5k (datasets are all in `D:\Work\Uni\FYP\Dataset\`)
+
+---
+
 **ArchiText** — Transforming words into buildings.

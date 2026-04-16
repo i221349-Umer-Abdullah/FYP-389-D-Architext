@@ -169,7 +169,7 @@ Designed for robotics/navigation
 Download:
 GitHub: https://github.com/TeaganLi/HouseExpo
 
-Download Commands:
+Download commands:
 
 cd d:\Work\Uni\FYP\architext\datasets
 # Clone repository

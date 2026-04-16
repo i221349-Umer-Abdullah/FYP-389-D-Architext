@@ -87,7 +87,7 @@ async def generate_and_plot(prompt, output_image_path):
     print(f"\\n✅ Saved 2D visual layout to: {output_image_path}")
 
 if __name__ == "__main__":
-    prompt = "A warm cozy house with 2 bedrooms, 1 bathroom, a big living room, an open kitchen, and a small garden"
+    prompt = "A warm cozy house with 2 bedrooms, a big living room, an open kitchen, and a small garden"
     
     output_path = ROOT / "output" / "api_generated" / "2d_preview.png"
     output_path.parent.mkdir(parents=True, exist_ok=True)

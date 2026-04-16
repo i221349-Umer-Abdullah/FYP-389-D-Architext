@@ -612,7 +612,7 @@ The T5 model trained successfully with:
 - **Loss:** Cross-entropy (standard for seq2seq)
 - **Result:** >95% valid JSON generation
 - **Files:** `models/nlp_t5/final_model/`
-
+.
 ### Key Numbers to Remember
 - CubiCasa5k: ~5000 floor plans
 - NLP training data: ~2000 samples
