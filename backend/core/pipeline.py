@@ -11,6 +11,7 @@ The pipeline runs as a background async task and updates the Job object
 throughout so the status endpoint can report real-time progress.
 """
 
+import os
 import sys
 import asyncio
 from pathlib import Path
@@ -28,6 +29,10 @@ from backend.core.nlp_adapter    import get_nlp_adapter
 from backend.core.mock_gnn       import MockGNNAdapter
 from backend.core.real_gnn       import get_real_gnn
 from backend.core.spec_converter import normalise_spec
+
+# Generator mode: "llm" uses the LLM adapter (default), "gnn" uses the trained GNN.
+# Override with the GENERATOR_MODE environment variable.
+DEFAULT_GENERATOR_MODE = os.getenv("GENERATOR_MODE", "llm")
 
 IFC_OUTPUT_DIR = _ROOT / "output" / "api_generated"
 IFC_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -232,34 +237,54 @@ def _snap_to_adjacent(isolated: dict, anchor: dict) -> None:
         isolated["x"] = round(ax1, 2)
 
 
-async def run_pipeline(job: Job, project_name: Optional[str] = None) -> None:
+async def run_pipeline(job: Job, project_name: Optional[str] = None,
+                       generator_mode: Optional[str] = None) -> None:
     """
     Run the full 4-layer pipeline for a given job.
     Updates job.status, job.progress, and job.preview throughout.
+
+    generator_mode: "llm" (default) or "gnn"
+      "llm" — LLM API generates rooms directly from the text prompt (Layers 1+2 combined)
+      "gnn" — Original T5 NLP + StructuralGNN path
     """
+    mode = (generator_mode or DEFAULT_GENERATOR_MODE).lower()
+
     try:
-        # ── Layer 1: NLP ───────────────────────────────────────────────────────
-        job.update(JobStatus.PROCESSING, "Layer 1: Parsing natural language...", 10)
-        await asyncio.sleep(0)
+        if mode == "llm":
+            # ── LLM path: Layers 1 + 2 combined ───────────────────────────────
+            job.update(JobStatus.PROCESSING, "Generating layout with LLM...", 10)
+            await asyncio.sleep(0)
 
-        nlp  = get_nlp_adapter()
-        raw  = nlp.parse(job.text)
-        from backend.core.spec_converter import normalise_spec
-        spec = normalise_spec(raw)
-        job.spec = spec
+            from backend.core.llm_adapter import generate_room_layout, spec_from_room_graph
+            room_graph = await generate_room_layout(job.text)
+            spec       = spec_from_room_graph(room_graph)
+            job.spec   = spec
 
-        job.update(JobStatus.PROCESSING, "Layer 1 complete — spec extracted", 25)
-        await asyncio.sleep(0)
+            job.update(JobStatus.PROCESSING, "LLM layout generated", 60)
+            await asyncio.sleep(0)
 
-        # ── Layer 2: GNN (mock or real) ────────────────────────────────────────
-        job.update(JobStatus.PROCESSING, "Layer 2: Generating room layout...", 40)
-        await asyncio.sleep(0)
+        else:
+            # ── GNN path: T5 NLP (Layer 1) + StructuralGNN (Layer 2) ──────────
+            job.update(JobStatus.PROCESSING, "Layer 1: Parsing natural language...", 10)
+            await asyncio.sleep(0)
 
-        loop       = asyncio.get_event_loop()
-        room_graph = await loop.run_in_executor(None, _gnn.generate, spec)
+            nlp  = get_nlp_adapter()
+            raw  = nlp.parse(job.text)
+            from backend.core.spec_converter import normalise_spec
+            spec = normalise_spec(raw)
+            job.spec = spec
 
-        job.update(JobStatus.PROCESSING, "Layer 2 complete — room graph generated", 60)
-        await asyncio.sleep(0)
+            job.update(JobStatus.PROCESSING, "Layer 1 complete — spec extracted", 25)
+            await asyncio.sleep(0)
+
+            job.update(JobStatus.PROCESSING, "Layer 2: Generating room layout with GNN...", 40)
+            await asyncio.sleep(0)
+
+            loop       = asyncio.get_event_loop()
+            room_graph = await loop.run_in_executor(None, _gnn.generate, spec)
+
+            job.update(JobStatus.PROCESSING, "Layer 2 complete — room graph generated", 60)
+            await asyncio.sleep(0)
 
         # ── Layer 3: Validate ──────────────────────────────────────────────────
         job.update(JobStatus.PROCESSING, "Layer 3: Validating layout...", 70)

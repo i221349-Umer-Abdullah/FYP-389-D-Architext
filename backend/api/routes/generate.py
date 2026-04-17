@@ -20,7 +20,7 @@ async def generate(request: GenerateRequest, background_tasks: BackgroundTasks):
     job = job_manager.create_job(request.text)
 
     # Kick off pipeline as a background task
-    background_tasks.add_task(run_pipeline, job, request.project_name)
+    background_tasks.add_task(run_pipeline, job, request.project_name, request.generator_mode)
 
     return GenerateResponse(
         job_id  = job.job_id,

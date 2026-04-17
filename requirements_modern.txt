@@ -1,3 +1,7 @@
+# LLM provider clients (for llm_adapter.py)
+openai
+anthropic
+python-dotenv
 blobfile
 cairosvg
 drawSvg
