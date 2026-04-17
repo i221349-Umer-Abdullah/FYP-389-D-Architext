@@ -1,0 +1,281 @@
+.page {
+  min-height: 100svh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at 22% 78%, rgba(10, 10, 10, 0.03), transparent 42%),
+    radial-gradient(circle at 80% 20%, rgba(10, 10, 10, 0.035), transparent 40%),
+    #f9f9f9;
+  padding: clamp(24px, 4vw, 48px);
+}
+
+.card {
+  width: 100%;
+  max-width: 420px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(10, 10, 10, 0.12);
+  border-radius: var(--radius-l, 24px);
+  padding: clamp(28px, 4vw, 44px);
+  box-shadow:
+    0 4px 6px rgba(10, 10, 10, 0.04),
+    0 20px 48px rgba(10, 10, 10, 0.07);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ── Brand ─────────────────────────────────────────────── */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.brandMark {
+  font-size: 1.1rem;
+  color: #0a0a0a;
+}
+
+.brandName {
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #0a0a0a;
+}
+
+.copy {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.65;
+  color: rgba(10, 10, 10, 0.68);
+}
+
+/* ── Tabs ───────────────────────────────────────────────── */
+.tabs {
+  display: flex;
+  gap: 0;
+  border: 1px solid rgba(10, 10, 10, 0.14);
+  border-radius: var(--radius-m, 18px);
+  padding: 3px;
+  background: rgba(10, 10, 10, 0.04);
+}
+
+.tab,
+.tabActive {
+  flex: 1;
+  padding: 8px 14px;
+  border: none;
+  border-radius: calc(var(--radius-m, 18px) - 3px);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+  background: transparent;
+  color: rgba(10, 10, 10, 0.5);
+}
+
+.tabActive {
+  background: #0a0a0a;
+  color: #f9f9f9;
+}
+
+.tab:hover {
+  color: #0a0a0a;
+}
+
+/* ── Google button ──────────────────────────────────────── */
+.googleBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 18px;
+  border: 1px solid rgba(10, 10, 10, 0.18);
+  border-radius: var(--radius-m, 18px);
+  background: #fff;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #0a0a0a;
+  cursor: pointer;
+  transition: background 0.16s, border-color 0.16s;
+}
+
+.googleBtn:hover:not(:disabled) {
+  background: rgba(10, 10, 10, 0.04);
+  border-color: rgba(10, 10, 10, 0.28);
+}
+
+.googleBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.googleMark {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(10, 10, 10, 0.16);
+  border-radius: 50%;
+  background: #fff;
+  color: #1a73e8;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+/* ── Divider ────────────────────────────────────────────── */
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: rgba(10, 10, 10, 0.38);
+  font-size: 0.8rem;
+}
+
+.divider::before,
+.divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(10, 10, 10, 0.1);
+}
+
+/* ── Form ───────────────────────────────────────────────── */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: rgba(10, 10, 10, 0.65);
+  letter-spacing: 0.01em;
+}
+
+.input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid rgba(10, 10, 10, 0.18);
+  border-radius: var(--radius-s, 12px);
+  background: #fff;
+  font-size: 0.9rem;
+  color: #0a0a0a;
+  outline: none;
+  transition: border-color 0.16s, box-shadow 0.16s;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.input::placeholder {
+  color: rgba(10, 10, 10, 0.32);
+}
+
+.input:focus {
+  border-color: rgba(10, 10, 10, 0.55);
+  box-shadow: 0 0 0 3px rgba(10, 10, 10, 0.06);
+}
+
+.input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ── Error ──────────────────────────────────────────────── */
+.error {
+  margin: 0;
+  padding: 9px 13px;
+  background: rgba(220, 38, 38, 0.07);
+  border: 1px solid rgba(220, 38, 38, 0.2);
+  border-radius: var(--radius-s, 12px);
+  font-size: 0.85rem;
+  color: #b91c1c;
+}
+
+.errorCode {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+/* ── Submit button ──────────────────────────────────────── */
+.submitBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 11px 18px;
+  border: none;
+  border-radius: var(--radius-m, 18px);
+  background: #0a0a0a;
+  color: #f9f9f9;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.16s;
+  font-family: inherit;
+  margin-top: 2px;
+}
+
+.submitBtn:hover:not(:disabled) {
+  opacity: 0.84;
+}
+
+.submitBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.secondaryLink {
+  align-self: center;
+  font-size: 0.84rem;
+  color: rgba(10, 10, 10, 0.62);
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
+}
+
+.authSwitch {
+  margin: -2px 0 0;
+  text-align: center;
+  font-size: 0.86rem;
+  color: rgba(10, 10, 10, 0.62);
+}
+
+.inlineLink {
+  color: #0a0a0a;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
+}
+
+@media (max-width: 480px) {
+  .page {
+    align-items: flex-start;
+    padding: 16px 8px;
+  }
+
+  .card {
+    max-width: none;
+    border-radius: 8px;
+    padding: 22px 16px;
+    gap: 16px;
+  }
+
+  .googleBtn,
+  .submitBtn,
+  .input {
+    border-radius: 8px;
+  }
+}

@@ -1,0 +1,52 @@
+.app-root {
+  min-height: 100svh;
+}
+
+.app-container {
+  width: min(1280px, 100% - 2.2rem);
+  margin-inline: auto;
+}
+
+.button-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: transparent;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition:
+    transform 220ms ease,
+    background 220ms ease,
+    color 220ms ease;
+}
+
+.button-chip:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.button-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.button-chip-solid {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+@media (max-width: 640px) {
+  .app-container {
+    width: min(100% - 1rem, 1280px);
+  }
+
+  .button-chip {
+    min-height: 44px;
+    border-radius: 8px;
+  }
+}

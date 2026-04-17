@@ -1,0 +1,130 @@
+.section {
+  padding: clamp(24px, 5vw, 52px) 0 clamp(46px, 8vw, 92px);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+  gap: clamp(14px, 2.2vw, 26px);
+  align-items: start;
+}
+
+.canvasPanel {
+  border: 1px solid rgba(10, 10, 10, 0.14);
+  border-radius: 24px;
+  padding: 0 clamp(16px, 1.7vw, 22px) clamp(16px, 1.7vw, 22px);
+  background: rgba(249, 249, 249, 0.82);
+}
+
+/* ── Two viewports side by side ─────────────────────────────────────────── */
+.viewportsRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.viewportsRow.single {
+  grid-template-columns: 1fr;
+}
+
+.viewport {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.viewportFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 2px;
+}
+
+.viewportMeta {
+  font-size: 12px;
+  color: rgba(10, 10, 10, 0.55);
+}
+
+/* kept for the SSR loading fallback */
+.canvasFallback {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 50% 40%, rgba(10, 10, 10, 0.06), transparent 58%),
+    rgba(249, 249, 249, 1);
+}
+
+/* ── 2D floor plan card (full-width, below main layout) ─────────────────── */
+.floorPlanCard {
+  margin-top: clamp(14px, 2vw, 24px);
+  border: 1px solid rgba(10, 10, 10, 0.14);
+  border-radius: 24px;
+  padding: clamp(18px, 2vw, 28px);
+  background: rgba(249, 249, 249, 0.82);
+}
+
+.floorPlanTitle {
+  margin: 0 0 18px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(10, 10, 10, 0.55);
+}
+
+.floorPlanRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 24px;
+}
+
+.floorPlanItem {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.floorPlanLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: #111;
+}
+
+.floorPlanImg {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid rgba(10, 10, 10, 0.1);
+  background: #fff;
+  display: block;
+}
+
+.floorPlanMeta {
+  font-size: 11px;
+  color: rgba(10, 10, 10, 0.5);
+}
+
+@media (max-width: 1100px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .viewportsRow {
+    grid-template-columns: 1fr;
+  }
+
+  .section {
+    padding-top: 14px;
+    padding-bottom: 42px;
+  }
+
+  .canvasPanel {
+    border-radius: 16px;
+    padding-left: 12px;
+    padding-right: 12px;
+    padding-bottom: 12px;
+  }
+}

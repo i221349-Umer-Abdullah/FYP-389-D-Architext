@@ -25,6 +25,7 @@ class Job:
         self.spec        = None   # Layer 1 output
         self.preview     = None   # Layer 2+3 output (room summary)
         self.ifc_path    = None   # Path to generated .ifc file
+        self.preview_png = None   # Path to generated 2D preview PNG
         self.error       = None
         self.created_at  = datetime.datetime.utcnow()
         self.updated_at  = datetime.datetime.utcnow()

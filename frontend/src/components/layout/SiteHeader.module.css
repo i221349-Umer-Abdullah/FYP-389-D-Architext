@@ -1,0 +1,164 @@
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: rgba(249, 249, 249, 0.9);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(10, 10, 10, 0.14);
+}
+
+.inner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 72px;
+  gap: 24px;
+}
+
+.brand {
+  font-size: 1.08rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 800;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.menuButton {
+  display: none;
+  min-height: 38px;
+  padding: 0 13px;
+  border: 1px solid rgba(10, 10, 10, 0.2);
+  border-radius: 8px;
+  background: rgba(249, 249, 249, 0.88);
+  color: #0a0a0a;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.link {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  transition: border-color 220ms ease;
+}
+
+.link:hover {
+  border-color: rgba(10, 10, 10, 0.35);
+}
+
+.linkButton {
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 220ms ease;
+}
+
+.linkButton:hover {
+  border-color: rgba(10, 10, 10, 0.35);
+}
+
+@media (max-width: 860px) {
+  .inner {
+    height: 64px;
+  }
+
+  .brand {
+    font-size: 0.93rem;
+  }
+
+  .menuButton {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .nav {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    left: 0;
+    display: none;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    padding: 10px;
+    border: 1px solid rgba(10, 10, 10, 0.14);
+    border-radius: 8px;
+    background: rgba(249, 249, 249, 0.98);
+    box-shadow: 0 18px 42px rgba(10, 10, 10, 0.1);
+  }
+
+  .navOpen {
+    display: flex;
+  }
+
+  .link {
+    display: flex;
+    justify-content: center;
+    padding: 7px 11px;
+    border-color: rgba(10, 10, 10, 0.1);
+    border-radius: 8px;
+  }
+
+  .linkButton {
+    width: 100%;
+    justify-content: center;
+    padding: 7px 11px;
+    border-color: rgba(10, 10, 10, 0.1);
+    border-radius: 8px;
+  }
+
+  .authRow {
+    justify-content: center;
+  }
+}
+
+/* ── Auth button row ─────────────────────────────────────── */
+.authRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid rgba(10, 10, 10, 0.18);
+  object-fit: cover;
+}
+
+.avatarFallback {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid rgba(10, 10, 10, 0.18);
+  background: rgba(10, 10, 10, 0.07);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #0a0a0a;
+}

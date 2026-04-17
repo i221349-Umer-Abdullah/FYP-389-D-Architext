@@ -1,0 +1,320 @@
+.section {
+  position: relative;
+  border-top: 1px solid rgba(10, 10, 10, 0.13);
+  border-bottom: 1px solid rgba(10, 10, 10, 0.13);
+  padding: clamp(62px, 8vw, 110px) 0;
+  overflow: clip;
+  background:
+    radial-gradient(circle at 85% 12%, rgba(10, 10, 10, 0.04), transparent 38%),
+    radial-gradient(circle at 12% 78%, rgba(10, 10, 10, 0.04), transparent 42%),
+    rgba(249, 249, 249, 1);
+}
+
+.backgroundGrid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.24;
+  background-image:
+    linear-gradient(rgba(10, 10, 10, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(10, 10, 10, 0.05) 1px, transparent 1px);
+  background-size: 88px 88px;
+}
+
+.heroBlock {
+  position: relative;
+  z-index: 1;
+  margin-bottom: clamp(26px, 4vw, 44px);
+}
+
+.kicker {
+  margin: 0 0 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.72rem;
+  opacity: 0.72;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(1.8rem, 5vw, 4.2rem);
+  letter-spacing: -0.04em;
+  line-height: 0.93;
+  max-width: 14ch;
+}
+
+.subtitle {
+  margin: 18px 0 0;
+  max-width: 66ch;
+  line-height: 1.62;
+  color: rgba(10, 10, 10, 0.74);
+}
+
+.badges {
+  margin-top: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.badge {
+  border: 1px solid rgba(10, 10, 10, 0.24);
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: rgba(249, 249, 249, 0.9);
+}
+
+.pipelinePanel {
+  position: relative;
+  z-index: 1;
+  border: 1px solid rgba(10, 10, 10, 0.18);
+  border-radius: 24px;
+  padding: clamp(16px, 2.2vw, 24px);
+  margin-bottom: clamp(18px, 3vw, 30px);
+  background: rgba(249, 249, 249, 0.88);
+  overflow: clip;
+}
+
+.pipelineGlow {
+  position: absolute;
+  top: 50%;
+  left: 42%;
+  width: 42%;
+  height: 180%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, rgba(10, 10, 10, 0.14), transparent 70%);
+  pointer-events: none;
+}
+
+.pipelinePrompt,
+.pipelineOutput {
+  margin: 0;
+  font-size: 0.92rem;
+  letter-spacing: 0.01em;
+}
+
+.pipelinePrompt {
+  margin-bottom: 14px;
+}
+
+.pipelineOutput {
+  margin-top: 14px;
+  color: rgba(10, 10, 10, 0.8);
+}
+
+.pipelineTrack {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.pipelineStep {
+  border: 1px solid rgba(10, 10, 10, 0.24);
+  border-radius: 999px;
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  background: rgba(249, 249, 249, 0.96);
+}
+
+.apiGrid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: clamp(22px, 3vw, 34px);
+}
+
+.apiCard {
+  grid-column: span 6;
+  border: 1px solid rgba(10, 10, 10, 0.14);
+  border-radius: 18px;
+  padding: 14px;
+  background: rgba(249, 249, 249, 0.9);
+}
+
+.apiMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.method {
+  font-size: 0.7rem;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  border: 1px solid rgba(10, 10, 10, 0.2);
+  border-radius: 999px;
+  padding: 4px 8px;
+}
+
+.path {
+  font-family: var(--font-geist-mono), "Consolas", monospace;
+  font-size: 0.78rem;
+}
+
+.purpose {
+  margin: 10px 0 0;
+  color: rgba(10, 10, 10, 0.75);
+  line-height: 1.5;
+}
+
+.viewGrid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: clamp(22px, 3vw, 34px);
+}
+
+.viewCard {
+  grid-column: span 4;
+  border: 1px solid rgba(10, 10, 10, 0.14);
+  border-radius: 18px;
+  padding: clamp(14px, 1.7vw, 20px);
+  background: rgba(249, 249, 249, 0.92);
+}
+
+.viewTitle {
+  margin: 0 0 12px;
+  font-size: 1.1rem;
+  letter-spacing: -0.02em;
+}
+
+.viewList {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+  color: rgba(10, 10, 10, 0.78);
+  line-height: 1.5;
+}
+
+.stackPanel {
+  position: relative;
+  z-index: 1;
+  border: 1px solid rgba(10, 10, 10, 0.16);
+  border-radius: 20px;
+  padding: 16px;
+  margin-bottom: clamp(20px, 3vw, 34px);
+  background: rgba(249, 249, 249, 0.9);
+}
+
+.stackTitle {
+  margin: 0 0 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.72rem;
+}
+
+.stackPills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.stackPill {
+  border-radius: 999px;
+  border: 1px solid rgba(10, 10, 10, 0.2);
+  padding: 7px 12px;
+  font-size: 0.76rem;
+  letter-spacing: 0.04em;
+}
+
+.layoutBoard {
+  position: relative;
+  z-index: 1;
+  border: 1px solid rgba(10, 10, 10, 0.16);
+  border-radius: 22px;
+  padding: clamp(16px, 2vw, 22px);
+  background: rgba(249, 249, 249, 0.92);
+}
+
+.layoutLabel {
+  margin: 0 0 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.72rem;
+}
+
+.layoutGrid {
+  display: grid;
+  grid-template-columns: 1fr 1.35fr;
+  gap: 10px;
+}
+
+.layoutLeft,
+.layoutTop,
+.layoutBottom {
+  border: 1px solid rgba(10, 10, 10, 0.16);
+  border-radius: 14px;
+  padding: 12px;
+  min-height: 120px;
+  line-height: 1.55;
+}
+
+.layoutTop,
+.layoutBottom {
+  min-height: 96px;
+}
+
+@media (max-width: 1080px) {
+  .apiCard {
+    grid-column: span 12;
+  }
+
+  .viewCard {
+    grid-column: span 6;
+  }
+}
+
+@media (max-width: 760px) {
+  .pipelineTrack {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .viewCard {
+    grid-column: span 12;
+  }
+
+  .layoutGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .layoutLeft,
+  .layoutTop,
+  .layoutBottom {
+    min-height: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .section {
+    padding: 52px 0;
+  }
+
+  .backgroundGrid {
+    background-size: 56px 56px;
+  }
+
+  .pipelinePanel {
+    border-radius: 16px;
+  }
+
+  .apiCard,
+  .viewCard,
+  .stackPanel,
+  .layoutBoard {
+    border-radius: 14px;
+  }
+}

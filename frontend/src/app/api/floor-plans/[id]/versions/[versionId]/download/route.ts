@@ -1,0 +1,41 @@
+import { getServerSession } from "next-auth";
+import { NextResponse } from "next/server";
+
+import { authOptions } from "@/lib/auth";
+import { openFloorPlanDownload } from "@/lib/floorPlans";
+
+export const runtime = "nodejs";
+
+type VersionDownloadRouteContext = {
+  params: Promise<{
+    id: string;
+    versionId: string;
+  }>;
+};
+
+function contentDispositionFileName(fileName: string) {
+  return fileName.replace(/["\\]/g, "");
+}
+
+export async function GET(_request: Request, { params }: VersionDownloadRouteContext) {
+  const session = await getServerSession(authOptions);
+
+  if (!session?.user) {
+    return NextResponse.json({ error: "Login required." }, { status: 401 });
+  }
+
+  const { id, versionId } = await params;
+  const download = await openFloorPlanDownload(id, versionId);
+
+  if (!download) {
+    return NextResponse.json({ error: "Floor plan version not found." }, { status: 404 });
+  }
+
+  return new Response(download.stream, {
+    headers: {
+      "Content-Type": download.version.mimeType,
+      "Content-Length": String(download.version.size),
+      "Content-Disposition": `attachment; filename="${contentDispositionFileName(download.version.originalName)}"`,
+    },
+  });
+}

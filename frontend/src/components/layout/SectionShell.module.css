@@ -1,0 +1,10 @@
+.section {
+  position: relative;
+  padding: clamp(72px, 9vw, 136px) 0;
+}
+
+@media (max-width: 640px) {
+  .section {
+    padding: 52px 0;
+  }
+}

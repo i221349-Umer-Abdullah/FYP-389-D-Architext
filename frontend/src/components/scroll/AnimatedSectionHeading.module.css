@@ -1,0 +1,37 @@
+.heading {
+  margin-bottom: clamp(24px, 3.4vw, 42px);
+  max-width: 72ch;
+}
+
+/* Perspective wrappers — each is a separate louvre blade */
+.kickerSlat {
+  perspective: 600px;
+  margin-bottom: 14px;
+}
+
+.titleSlat {
+  perspective: 900px;
+}
+
+.kicker {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.74rem;
+  opacity: 0.72;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(1.65rem, 3.8vw, 3.6rem);
+  letter-spacing: -0.035em;
+  line-height: 0.98;
+  max-width: 14ch;
+}
+
+.subtitle {
+  margin: 14px 0 0;
+  color: rgba(10, 10, 10, 0.74);
+  max-width: 56ch;
+  line-height: 1.6;
+}

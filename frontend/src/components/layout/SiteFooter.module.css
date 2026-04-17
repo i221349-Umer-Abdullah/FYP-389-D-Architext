@@ -1,0 +1,97 @@
+.footer {
+  position: relative;
+  border-top: 1px solid rgba(10, 10, 10, 0.16);
+  padding: clamp(28px, 4vw, 52px) 0;
+  background:
+    radial-gradient(circle at 15% 20%, rgba(10, 10, 10, 0.05), transparent 38%),
+    radial-gradient(circle at 86% 80%, rgba(10, 10, 10, 0.04), transparent 36%),
+    rgba(249, 249, 249, 1);
+}
+
+.inner {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr 1fr;
+  gap: 20px;
+  align-items: end;
+}
+
+.brand {
+  margin: 0;
+  font-size: clamp(1.3rem, 2vw, 1.8rem);
+  letter-spacing: -0.03em;
+  font-weight: 600;
+}
+
+.tagline {
+  margin: 8px 0 0;
+  color: rgba(10, 10, 10, 0.74);
+  line-height: 1.55;
+}
+
+.meta {
+  justify-self: center;
+}
+
+.label {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.72rem;
+  opacity: 0.66;
+}
+
+.names {
+  margin: 8px 0 0;
+  font-size: 1rem;
+  letter-spacing: 0.01em;
+}
+
+.contacts {
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+}
+
+.contact {
+  position: relative;
+  font-size: 0.85rem;
+  color: rgba(10, 10, 10, 0.85);
+  transition: color 220ms ease;
+}
+
+.contact::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -2px;
+  width: 100%;
+  height: 1px;
+  background: rgba(10, 10, 10, 0.3);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 220ms ease;
+}
+
+.contact:hover {
+  color: rgba(10, 10, 10, 1);
+}
+
+.contact:hover::after {
+  transform: scaleX(1);
+}
+
+@media (max-width: 980px) {
+  .inner {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+
+  .meta {
+    justify-self: start;
+  }
+
+  .contacts {
+    justify-items: start;
+  }
+}

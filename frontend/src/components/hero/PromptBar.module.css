@@ -1,0 +1,107 @@
+.form {
+  margin-top: 32px;
+}
+
+.shell {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 900px;
+  padding: 10px;
+  border-radius: 999px;
+  background: rgba(249, 249, 249, 0.88);
+  box-shadow:
+    0 10px 34px rgba(10, 10, 10, 0.08),
+    0 0 0 1px rgba(10, 10, 10, 0.18);
+}
+
+.label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.input {
+  width: 100%;
+  min-height: 48px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: clamp(0.95rem, 1.12vw, 1.07rem);
+  padding: 0 16px;
+  color: var(--fg);
+}
+
+.input::placeholder {
+  color: rgba(10, 10, 10, 0.46);
+}
+
+.input:focus {
+  outline: none;
+}
+
+.button {
+  min-height: 48px;
+  padding: 0 20px;
+  border-radius: 999px;
+  border: 1px solid rgba(10, 10, 10, 1);
+  background: rgba(10, 10, 10, 1);
+  color: rgba(249, 249, 249, 1);
+  font-weight: 600;
+  font-size: 0.87rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  transition:
+    background 220ms ease,
+    color 220ms ease,
+    transform 220ms ease;
+}
+
+.button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.button:disabled {
+  opacity: 0.56;
+  cursor: not-allowed;
+}
+
+.error {
+  margin-top: 10px;
+  min-height: 18px;
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+}
+
+@media (max-width: 760px) {
+  .form {
+    margin-top: 24px;
+  }
+
+  .shell {
+    grid-template-columns: 1fr;
+    border-radius: 22px;
+    padding: 12px;
+  }
+
+  .input {
+    min-height: 44px;
+    padding: 0 12px;
+  }
+
+  .button {
+    width: 100%;
+    border-radius: 8px;
+  }
+}
+
+@media (max-width: 420px) {
+  .input {
+    font-size: 0.9rem;
+  }
+}

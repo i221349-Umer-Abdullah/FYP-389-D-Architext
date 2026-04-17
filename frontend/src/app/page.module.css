@@ -1,0 +1,24 @@
+.page {
+  min-height: 100svh;
+}
+
+.storySection {
+  border-top: 1px solid rgba(10, 10, 10, 0.11);
+  border-bottom: 1px solid rgba(10, 10, 10, 0.11);
+  background:
+    /* radial vignette top-left */
+    radial-gradient(circle at 14% 60%, rgba(10, 10, 10, 0.03), transparent 45%),
+    /* white fade blooming from bottom-right corner */
+    radial-gradient(ellipse 80% 70% at 100% 100%, #f9f9f9 20%, transparent 70%),
+    /* light-mode wash */
+    linear-gradient(rgba(249, 249, 249, 0.82), rgba(249, 249, 249, 0.82)),
+    /* architectural backdrop */
+    url('/archi2.webp') center / cover no-repeat;
+  background-color: #f9f9f9;
+}
+
+.featuresSection {
+  background:
+    radial-gradient(circle at 88% 22%, rgba(10, 10, 10, 0.04), transparent 38%),
+    rgba(249, 249, 249, 1);
+}

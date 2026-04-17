@@ -29,13 +29,9 @@ async def download(job_id: str):
     )
 
 
-@router.get("/preview/{job_id}", summary="Get room summary JSON")
-async def preview(job_id: str):
-    """
-    Returns the room summary (room list, areas, positions) as JSON.
-    Available as soon as status is `done`.
-    Useful for the frontend 2D preview renderer.
-    """
+@router.get("/summary/{job_id}", summary="Get room summary JSON")
+async def summary(job_id: str):
+    """Returns the room summary (room list, areas, positions) as JSON."""
     job = job_manager.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")

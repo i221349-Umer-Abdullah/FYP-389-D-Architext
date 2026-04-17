@@ -1,0 +1,105 @@
+.panel {
+  border: 1px solid rgba(10, 10, 10, 0.14);
+  border-radius: 24px;
+  padding: clamp(20px, 2.2vw, 28px);
+  background: rgba(249, 249, 249, 0.82);
+  display: grid;
+  gap: 14px;
+}
+
+.kicker {
+  margin: 0;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  opacity: 0.7;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(1.35rem, 2.4vw, 2.2rem);
+  line-height: 1.03;
+  letter-spacing: -0.03em;
+}
+
+.text {
+  margin: 0;
+  color: rgba(10, 10, 10, 0.75);
+  line-height: 1.58;
+}
+
+.modeRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.prompt {
+  margin-top: 4px;
+}
+
+.buildMessage {
+  margin: 0;
+  font-size: 0.82rem;
+  color: rgba(10, 10, 10, 0.65);
+  font-style: italic;
+}
+
+.promptEcho {
+  margin: 0;
+  font-size: 0.84rem;
+  color: rgba(10, 10, 10, 0.72);
+  line-height: 1.6;
+}
+
+.promptEcho span {
+  color: rgba(10, 10, 10, 1);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.downloadHint {
+  margin: -4px 0 0;
+  color: rgba(10, 10, 10, 0.58);
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+
+.saveMessage,
+.saveError {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.saveMessage {
+  border: 1px solid rgba(22, 101, 52, 0.2);
+  background: rgba(22, 101, 52, 0.07);
+  color: #166534;
+}
+
+.saveError {
+  border: 1px solid rgba(185, 28, 28, 0.2);
+  background: rgba(185, 28, 28, 0.07);
+  color: #b91c1c;
+}
+
+@media (max-width: 640px) {
+  .panel {
+    border-radius: 16px;
+  }
+
+  .title {
+    font-size: clamp(1.25rem, 8vw, 1.8rem);
+  }
+
+  .actions :global(.button-chip) {
+    width: 100%;
+  }
+}

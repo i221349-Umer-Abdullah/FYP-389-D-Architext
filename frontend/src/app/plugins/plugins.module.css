@@ -1,0 +1,281 @@
+.page {
+  min-height: 100svh;
+  background:
+    linear-gradient(rgba(249, 249, 249, 0.88), rgba(249, 249, 249, 0.88)),
+    url("/archi1.webp") center / cover no-repeat;
+}
+
+.intro {
+  padding: clamp(28px, 4.5vw, 56px) 0 clamp(18px, 3vw, 30px);
+}
+
+.eyebrow {
+  margin: 0 0 12px;
+  color: rgba(10, 10, 10, 0.58);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.title {
+  max-width: 760px;
+  margin: 0;
+  color: #0a0a0a;
+  font-size: clamp(2.1rem, 5.8vw, 4.9rem);
+  font-weight: 850;
+  line-height: 0.96;
+}
+
+.subtitle {
+  max-width: 620px;
+  margin: 18px 0 0;
+  color: rgba(10, 10, 10, 0.7);
+  font-size: clamp(1rem, 1.8vw, 1.2rem);
+  line-height: 1.7;
+}
+
+.split {
+  display: grid;
+  min-height: clamp(460px, 58svh, 720px);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid rgba(10, 10, 10, 0.16);
+  border-bottom: 1px solid rgba(10, 10, 10, 0.16);
+}
+
+.pluginPanel {
+  position: relative;
+  display: flex;
+  min-height: 100%;
+  align-items: flex-end;
+  padding: clamp(28px, 5vw, 72px);
+  overflow: hidden;
+  transition:
+    background 220ms ease,
+    color 220ms ease;
+}
+
+.pluginPanel:first-child {
+  border-right: 1px solid rgba(10, 10, 10, 0.16);
+}
+
+.pluginPanel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(135deg, rgba(10, 10, 10, 0.06), transparent 54%),
+    radial-gradient(circle at 85% 18%, rgba(30, 115, 190, 0.18), transparent 34%);
+  opacity: 0.72;
+  transition: opacity 220ms ease;
+}
+
+.pluginPanel:nth-child(2)::before {
+  background:
+    linear-gradient(135deg, rgba(10, 10, 10, 0.05), transparent 52%),
+    radial-gradient(circle at 82% 18%, rgba(21, 130, 95, 0.18), transparent 34%);
+}
+
+.pluginPanel:hover {
+  background: rgba(10, 10, 10, 0.92);
+  color: #f9f9f9;
+}
+
+.pluginPanel:hover::before {
+  opacity: 0.2;
+}
+
+.panelContent {
+  position: relative;
+  z-index: 1;
+  max-width: 520px;
+}
+
+.panelEyebrow {
+  display: block;
+  margin-bottom: 14px;
+  color: rgba(10, 10, 10, 0.58);
+  font-size: 0.78rem;
+  font-weight: 850;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.pluginPanel:hover .panelEyebrow {
+  color: rgba(249, 249, 249, 0.7);
+}
+
+.panelTitle {
+  display: block;
+  margin: 0;
+  font-size: clamp(2.2rem, 5vw, 4.6rem);
+  font-weight: 850;
+  line-height: 0.95;
+}
+
+.panelCopy {
+  display: block;
+  margin: 18px 0 0;
+  color: rgba(10, 10, 10, 0.7);
+  font-size: clamp(1rem, 1.5vw, 1.12rem);
+  line-height: 1.65;
+}
+
+.pluginPanel:hover .panelCopy {
+  color: rgba(249, 249, 249, 0.76);
+}
+
+.panelAction {
+  display: inline-flex;
+  margin-top: 28px;
+  font-size: 0.85rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.detail {
+  padding: clamp(48px, 8vw, 92px) 0;
+}
+
+.detailGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(280px, 0.55fr);
+  gap: clamp(32px, 6vw, 88px);
+  align-items: start;
+}
+
+.description {
+  margin: 24px 0 0;
+  color: rgba(10, 10, 10, 0.72);
+  font-size: clamp(1rem, 1.7vw, 1.18rem);
+  line-height: 1.75;
+}
+
+.detailList {
+  display: grid;
+  gap: 14px;
+  margin: 34px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.detailItem {
+  padding: 18px 0;
+  border-top: 1px solid rgba(10, 10, 10, 0.14);
+  color: rgba(10, 10, 10, 0.75);
+  font-size: 0.98rem;
+  line-height: 1.6;
+}
+
+.downloadBox {
+  position: sticky;
+  top: 104px;
+  padding: 26px;
+  border: 1px solid rgba(10, 10, 10, 0.16);
+  border-radius: 8px;
+  background: rgba(249, 249, 249, 0.88);
+}
+
+.downloadTitle {
+  margin: 0;
+  color: #0a0a0a;
+  font-size: 1.1rem;
+  font-weight: 850;
+}
+
+.downloadCopy {
+  margin: 12px 0 22px;
+  color: rgba(10, 10, 10, 0.68);
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
+.downloadButton {
+  display: inline-flex;
+  width: 100%;
+  min-height: 46px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #0a0a0a;
+  border-radius: 8px;
+  background: #0a0a0a;
+  color: #f9f9f9;
+  font-size: 0.88rem;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+.downloadButton:hover {
+  opacity: 0.84;
+  transform: translateY(-1px);
+}
+
+.backLink {
+  display: inline-flex;
+  margin-top: 22px;
+  color: rgba(10, 10, 10, 0.68);
+  font-size: 0.88rem;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+@media (max-width: 760px) {
+  .split,
+  .detailGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .pluginPanel {
+    min-height: 320px;
+  }
+
+  .pluginPanel:first-child {
+    border-right: none;
+    border-bottom: 1px solid rgba(10, 10, 10, 0.16);
+  }
+
+  .downloadBox {
+    position: static;
+  }
+}
+
+@media (max-width: 520px) {
+  .intro {
+    padding-top: 24px;
+  }
+
+  .title {
+    font-size: clamp(2rem, 12vw, 3.35rem);
+  }
+
+  .subtitle {
+    font-size: 0.96rem;
+  }
+
+  .pluginPanel {
+    min-height: 260px;
+    padding: 24px 16px;
+  }
+
+  .panelTitle {
+    font-size: clamp(2rem, 12vw, 3.3rem);
+  }
+
+  .panelCopy {
+    font-size: 0.95rem;
+  }
+
+  .detail {
+    padding: 34px 0 52px;
+  }
+
+  .downloadBox {
+    padding: 18px;
+  }
+}

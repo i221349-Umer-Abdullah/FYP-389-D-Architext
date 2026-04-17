@@ -1,0 +1,42 @@
+.shell {
+  overflow: hidden;
+  border-top: 1px solid rgba(10, 10, 10, 0.14);
+  border-bottom: 1px solid rgba(10, 10, 10, 0.14);
+  background: rgba(249, 249, 249, 1);
+}
+
+.track {
+  display: flex;
+  width: max-content;
+  animation: marquee 26s linear infinite;
+}
+
+.track span {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  font-size: 0.72rem;
+  color: rgba(10, 10, 10, 0.72);
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (max-width: 640px) {
+  .track span {
+    padding: 14px 16px;
+    font-size: 0.66rem;
+    letter-spacing: 0.16em;
+  }
+}

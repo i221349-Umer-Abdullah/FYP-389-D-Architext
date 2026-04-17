@@ -1,0 +1,129 @@
+.section {
+  height: 210vh;
+  position: relative;
+  border-top: 1px solid rgba(10, 10, 10, 0.12);
+  border-bottom: 1px solid rgba(10, 10, 10, 0.12);
+}
+
+.sticky {
+  position: sticky;
+  top: 72px;
+  height: calc(100vh - 72px);
+  display: flex;
+  /* stretch so app-container fills the full sticky height */
+  align-items: stretch;
+  padding: 28px 0;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  /* stretch makes both columns fill the grid's height */
+  align-items: stretch;
+  gap: clamp(20px, 3vw, 56px);
+  /* fill the app-container which fills sticky */
+  height: 100%;
+  width: 100%;
+}
+
+.copy {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 16px;
+}
+
+.tag {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.75rem;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(1.8rem, 4.2vw, 4rem);
+  letter-spacing: -0.035em;
+  line-height: 0.95;
+  max-width: 12ch;
+}
+
+.text {
+  margin: 0;
+  max-width: 48ch;
+  line-height: 1.64;
+  color: rgba(10, 10, 10, 0.74);
+}
+
+.canvasWrap {
+  border-radius: 24px;
+  border: 1px solid rgba(10, 10, 10, 0.18);
+  overflow: clip;
+  background: rgba(249, 249, 249, 1);
+  /* position:relative lets the absolutely-positioned canvas fill this box */
+  position: relative;
+  /* height comes from the grid stretch chain — no min-height on desktop */
+}
+
+.canvasFallback {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(10, 10, 10, 0.08), transparent 55%),
+    rgba(249, 249, 249, 1);
+}
+
+@media (max-width: 1100px) {
+  .section {
+    height: auto;
+    padding: 74px 0;
+  }
+
+  .sticky {
+    position: static;
+    height: auto;
+    padding: 0;
+    align-items: initial;
+  }
+
+  .layout {
+    grid-template-columns: 1fr;
+    gap: 24px;
+    height: auto;
+    align-items: initial;
+  }
+
+  .copy {
+    justify-content: flex-start;
+  }
+
+  .canvasWrap,
+  .canvasFallback {
+    min-height: 50vh;
+    position: relative;
+  }
+}
+
+@media (max-width: 640px) {
+  .section {
+    padding: 44px 0;
+  }
+
+  .canvasWrap,
+  .canvasFallback {
+    min-height: 38vh;
+    border-radius: 16px;
+  }
+
+  .title {
+    font-size: clamp(1.8rem, 10vw, 3rem);
+    max-width: 13ch;
+  }
+}
+
+@media (max-width: 420px) {
+  .canvasWrap,
+  .canvasFallback {
+    min-height: 34vh;
+  }
+}

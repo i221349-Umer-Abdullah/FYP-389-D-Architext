@@ -35,6 +35,7 @@ from backend.core.spec_converter import normalise_spec
 DEFAULT_GENERATOR_MODE = os.getenv("GENERATOR_MODE", "llm")
 
 IFC_OUTPUT_DIR = _ROOT / "output" / "api_generated"
+PNG_OUTPUT_DIR = _ROOT / "output" / "api_generated"
 IFC_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Shared GNN instance
@@ -237,6 +238,62 @@ def _snap_to_adjacent(isolated: dict, anchor: dict) -> None:
         isolated["x"] = round(ax1, 2)
 
 
+_ROOM_COLOURS = {
+    "living": "#AED6F1", "kitchen": "#A9DFBF", "dining": "#D5F5E3",
+    "bedroom": "#F9E79F", "bathroom": "#FADBD8", "hallway": "#D7DBDD",
+    "balcony": "#A9CCE3", "garden": "#82E0AA", "parking": "#CCD1D1",
+    "storage": "#D2B4DE", "stair": "#F0B27A", "veranda": "#85C1E9",
+    "other": "#EAECEE",
+}
+
+
+def _render_png(room_graph: dict, output_path: str) -> None:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as patches
+
+    rooms = room_graph.get("rooms", [])
+    if not rooms:
+        return
+
+    fig, ax = plt.subplots(figsize=(8, 8))
+    xs = [r["x"] for r in rooms]
+    ys = [r["y"] for r in rooms]
+    xe = [r["x"] + r["width"] for r in rooms]
+    ye = [r["y"] + r["height"] for r in rooms]
+
+    margin = 1.0
+    ax.set_xlim(min(xs) - margin, max(xe) + margin)
+    ax.set_ylim(min(ys) - margin, max(ye) + margin)
+    ax.set_aspect("equal")
+    ax.grid(True, linestyle="--", alpha=0.3, color="#999")
+    ax.set_xlabel("metres", fontsize=8)
+    ax.set_ylabel("metres", fontsize=8)
+
+    for r in rooms:
+        rtype = r.get("type", "other")
+        colour = _ROOM_COLOURS.get(rtype, "#EAECEE")
+        rect = patches.Rectangle(
+            (r["x"], r["y"]), r["width"], r["height"],
+            linewidth=1.5, edgecolor="#333", facecolor=colour, alpha=0.85,
+        )
+        ax.add_patch(rect)
+        label = rtype.replace("_", " ").title()
+        area = round(r.get("area", r["width"] * r["height"]), 1)
+        ax.text(
+            r["x"] + r["width"] / 2, r["y"] + r["height"] / 2,
+            f"{label}\n{area} m\u00b2",
+            ha="center", va="center", fontsize=7.5, fontweight="bold", color="#222",
+        )
+
+    total = sum(r.get("area", r["width"] * r["height"]) for r in rooms)
+    ax.set_title(f"{len(rooms)} rooms  \u00b7  {round(total, 1)} m\u00b2", fontsize=10)
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=130, bbox_inches="tight")
+    plt.close(fig)
+
+
 async def run_pipeline(job: Job, project_name: Optional[str] = None,
                        generator_mode: Optional[str] = None) -> None:
     """
@@ -301,7 +358,16 @@ async def run_pipeline(job: Job, project_name: Optional[str] = None,
         job.update(JobStatus.PROCESSING, "Layer 3 complete — layout validated", 80)
         await asyncio.sleep(0)
 
-        # ── Layer 4: IFC Export ────────────────────────────────────────────────
+        # ── Layer 4a: 2D PNG Preview ───────────────────────────────────────────
+        job.update(JobStatus.PROCESSING, "Rendering 2D floor plan...", 85)
+        await asyncio.sleep(0)
+
+        png_path = str(PNG_OUTPUT_DIR / f"{job.job_id}.png")
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, lambda: _render_png(room_graph, png_path))
+        job.preview_png = png_path
+
+        # ── Layer 4b: IFC Export ───────────────────────────────────────────────
         job.update(JobStatus.PROCESSING, "Layer 4: Generating IFC file...", 90)
         await asyncio.sleep(0)
 

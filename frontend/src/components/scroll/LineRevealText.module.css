@@ -1,0 +1,17 @@
+.block {
+  display: grid;
+  gap: clamp(18px, 2.4vw, 30px);
+}
+
+/* Perspective parent — gives the rotateX child real 3D depth. */
+.slatWrap {
+  perspective: 700px;
+}
+
+.line {
+  margin: 0;
+  font-size: clamp(1.55rem, 4vw, 3.2rem);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  max-width: 22ch;
+}
