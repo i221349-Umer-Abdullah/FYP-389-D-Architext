@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { authOptions } from "@/lib/auth";
-import { readUserFloorPlans } from "@/lib/floorPlans";
+import { readFloorPlans } from "@/lib/floorPlans";
 
 import { DashboardClient } from "./DashboardClient";
 import styles from "./dashboard.module.css";
@@ -21,14 +21,18 @@ export default async function DashboardPage() {
     redirect(`/auth?callbackUrl=${encodeURIComponent("/dashboard")}`);
   }
 
-  const floorPlans = await readUserFloorPlans(session.user.email);
+  const floorPlans = await readFloorPlans(session.user.email);
 
   return (
     <div className={styles.page}>
       <SiteHeader />
       <main className={styles.main}>
         <div className="app-container">
-          <DashboardClient initialFloorPlans={floorPlans} mode="dashboard" />
+          <DashboardClient
+            initialFloorPlans={floorPlans}
+            mode="dashboard"
+            currentUserEmail={session.user.email}
+          />
         </div>
       </main>
     </div>

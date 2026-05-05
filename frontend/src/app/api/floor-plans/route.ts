@@ -56,6 +56,8 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const title = String(formData.get("title") ?? "");
     const description = String(formData.get("description") ?? "");
+    const studioDataRaw = formData.get("studioData");
+    const studioData = studioDataRaw ? String(studioDataRaw) : undefined;
     const file = formData.get("file");
 
     if (!isUploadedFile(file)) {
@@ -77,6 +79,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "File must be 25 MB or smaller." }, { status: 400 });
     }
 
+    const isPublicRaw = formData.get("isPublic");
+    const isPublic = isPublicRaw === "true" || isPublicRaw === "1";
+
     const record = await createFloorPlan({
       title,
       description,
@@ -86,6 +91,8 @@ export async function POST(request: Request) {
       contents: Buffer.from(await file.arrayBuffer()),
       uploaderName: session.user.name ?? session.user.email,
       uploaderEmail: session.user.email,
+      isPublic,
+      studioData,
     });
 
     const savedRecord = await getFloorPlan(record.id, session.user.email);

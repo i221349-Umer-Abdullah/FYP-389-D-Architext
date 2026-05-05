@@ -201,7 +201,7 @@ function parseRooms(data: unknown): RoomBlock[] {
   const cellWidth = maxWidth + 0.8;
   const cellDepth = maxDepth + 0.8;
 
-  return draftRooms.map((room, index) => {
+  const positioned = draftRooms.map((room, index) => {
     const column = index % columns;
     const row = Math.floor(index / columns);
     const centeredColumn = column - (columns - 1) / 2;
@@ -210,10 +210,18 @@ function parseRooms(data: unknown): RoomBlock[] {
 
     return {
       ...room,
-      x: room.x ?? centeredColumn * cellWidth,
-      z: room.z ?? centeredRow * cellDepth,
+      // room.x/z are top-left corners when explicit; shift to box center for Three.js
+      x: room.x !== null ? room.x + room.width / 2 : centeredColumn * cellWidth,
+      z: room.z !== null ? room.z + room.depth / 2 : centeredRow * cellDepth,
     };
   });
+
+  // Center the layout at the scene origin so all rooms sit on the slab
+  const allX = positioned.map((r) => r.x);
+  const allZ = positioned.map((r) => r.z);
+  const cx = (Math.min(...allX) + Math.max(...allX)) / 2;
+  const cz = (Math.min(...allZ) + Math.max(...allZ)) / 2;
+  return positioned.map((r) => ({ ...r, x: r.x - cx, z: r.z - cz }));
 }
 
 function getSlabSize(rooms: RoomBlock[]): [number, number, number] {

@@ -362,6 +362,44 @@
   gap: 10px;
 }
 
+.publicBadge {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: 8px;
+  background: rgba(10, 10, 10, 0.06);
+  border: 1px solid rgba(10, 10, 10, 0.18);
+  color: #4a4a4a;
+  font-size: 0.75rem;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.publishConfirm {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(10, 10, 10, 0.12);
+  background: rgba(255, 255, 255, 0.7);
+  width: 100%;
+}
+
+.publishConfirmText {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #3a3a3a;
+  line-height: 1.4;
+}
+
+.publishConfirmActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .ownerActionButton {
   display: inline-flex;
   min-height: 40px;
@@ -449,6 +487,55 @@
   height: 14px;
   flex: 0 0 auto;
   fill: currentColor;
+}
+
+.trashCornerButton {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  z-index: 2;
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(10, 10, 10, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #6b5b4e;
+  cursor: pointer;
+  transition:
+    background 180ms ease,
+    color 180ms ease,
+    border-color 180ms ease,
+    transform 180ms ease;
+}
+
+.trashCornerButton:hover:not(:disabled) {
+  background: rgba(10, 10, 10, 0.07);
+  color: #3a2e28;
+  border-color: rgba(10, 10, 10, 0.28);
+  transform: translateY(-1px);
+}
+
+.trashCornerButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.trashIcon {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  fill: currentColor;
+}
+
+.reactionCounts {
+  display: flex;
+  gap: 14px;
+  font-size: 0.82rem;
+  color: #6a6a6a;
+  font-weight: 600;
 }
 
 .reactionControls {
@@ -632,6 +719,52 @@
   color: rgba(10, 10, 10, 0.78);
   font-size: 0.86rem;
   overflow-wrap: anywhere;
+}
+
+.previewToggleRow {
+  display: flex;
+  gap: 6px;
+}
+
+.previewToggleBtn {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 14px;
+  border: 1px solid rgba(10, 10, 10, 0.2);
+  border-radius: 8px;
+  background: #fff;
+  color: rgba(10, 10, 10, 0.6);
+  font-size: 0.78rem;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.previewToggleActive {
+  border-color: #0a0a0a;
+  background: #0a0a0a;
+  color: #f9f9f9;
+}
+
+.modalActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.modalActions .downloadButton {
+  padding: 0 18px;
+  text-decoration: none;
+}
+
+.modalActions .downloadButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .previewShell {

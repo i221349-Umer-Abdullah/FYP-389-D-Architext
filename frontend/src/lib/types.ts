@@ -1,6 +1,8 @@
 export type WorkflowState = "idle" | "building" | "ready" | "error";
 export type GeneratorMode = "llm" | "gnn" | "both";
 
+export type { StyleId, MaterialTier } from "@/lib/architectureStyles";
+
 export interface GenerationRoom {
   name: string;
   type: string;
@@ -19,6 +21,8 @@ export interface GenerationResult {
   totalAreaM2: number;
   previewUrl: string;
   ifcDownloadUrl: string;
+  styleId: import("@/lib/architectureStyles").StyleId;
+  materialTier: import("@/lib/architectureStyles").MaterialTier;
 }
 
 export interface PromptSubmission {

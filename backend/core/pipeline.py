@@ -65,8 +65,8 @@ def _validate_and_fix(room_graph: dict, spec: dict) -> dict:
         r["height"] = max(r.get("height", min_h), min_h)
 
     # 2. Push-apart: iteratively resolve overlaps
-    MAX_PASSES = 25
-    PADDING    = 0.2  # gap between rooms in metres
+    MAX_PASSES = 60
+    PADDING    = 0.05  # minimal gap — rooms should nearly share walls
     for _ in range(MAX_PASSES):
         moved = False
         for i in range(len(rooms)):
@@ -170,6 +170,19 @@ def _validate_and_fix(room_graph: dict, spec: dict) -> dict:
                 # Add to main cluster so subsequent rooms can snap to it
                 main_indices.add(iso_idx)
 
+    # 5. Normalize: shift all rooms so minimum x and y are ≥ 0.
+    #    Prevents negative-coordinate rooms from being clamped to 0 in downstream
+    #    consumers (e.g. room_graph_to_ifc._validate), which causes 3D overlap.
+    if rooms:
+        min_x = min(r["x"] for r in rooms)
+        min_y = min(r["y"] for r in rooms)
+        if min_x < 0:
+            for r in rooms:
+                r["x"] = round(r["x"] - min_x, 2)
+        if min_y < 0:
+            for r in rooms:
+                r["y"] = round(r["y"] - min_y, 2)
+
     room_graph["rooms"] = rooms
     return room_graph
 
@@ -221,20 +234,16 @@ def _snap_to_adjacent(isolated: dict, anchor: dict) -> None:
     best = min(dist_left, dist_right, dist_top, dist_bot)
 
     if best == dist_right:
-        # Place isolated to the right of anchor
-        isolated["x"] = round(ax2 + 0.2, 2)
+        isolated["x"] = round(ax2, 2)
         isolated["y"] = round(ay1, 2)
     elif best == dist_left:
-        # Place isolated to the left of anchor
-        isolated["x"] = round(ax1 - isolated["width"] - 0.2, 2)
+        isolated["x"] = round(ax1 - isolated["width"], 2)
         isolated["y"] = round(ay1, 2)
     elif best == dist_top:
-        # Place isolated above anchor
-        isolated["y"] = round(ay2 + 0.2, 2)
+        isolated["y"] = round(ay2, 2)
         isolated["x"] = round(ax1, 2)
     else:
-        # Place isolated below anchor
-        isolated["y"] = round(ay1 - isolated["height"] - 0.2, 2)
+        isolated["y"] = round(ay1 - isolated["height"], 2)
         isolated["x"] = round(ax1, 2)
 
 

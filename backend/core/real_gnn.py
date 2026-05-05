@@ -228,8 +228,13 @@ def _decode_room_graph(node_features: np.ndarray,
         cy     = cy_norm * canvas_h
         area   = a_norm  * canvas_w * canvas_h
 
-        # Estimate width/height from area (assume ~1.3 aspect ratio)
-        aspect = 1.3
+        # Estimate width/height using type-specific aspect ratios (width:height)
+        _ASPECTS = {
+            'bedroom': 1.2, 'bathroom': 1.0, 'living': 1.4, 'kitchen': 1.3,
+            'dining': 1.3, 'hallway': 3.5, 'balcony': 2.5, 'garden': 1.0,
+            'parking': 0.55, 'storage': 1.0, 'stair': 0.85, 'veranda': 2.2,
+        }
+        aspect = _ASPECTS.get(room_type, 1.2)
         width  = max(float(np.sqrt(area / aspect)), 1.5)
         height = max(float(area / width),            1.5)
 

@@ -118,8 +118,8 @@ class RoomGraphToIFC:
             mw, mh  = MIN_DIMENSIONS.get(r["type"], DEFAULT_MIN)
             r["width"]  = max(float(r.get("width",  mw)), mw)
             r["height"] = max(float(r.get("height", mh)), mh)
-            r["x"]      = max(0.0, float(r["x"]))
-            r["y"]      = max(0.0, float(r["y"]))
+            r["x"]      = float(r.get("x", 0.0))
+            r["y"]      = float(r.get("y", 0.0))
             out.append(r)
         return out
 

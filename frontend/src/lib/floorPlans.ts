@@ -50,6 +50,8 @@ export type FloorPlanRecord = {
   uploaderName: string;
   uploaderEmail: string;
   uploadedAt: string;
+  isPublic: boolean;
+  studioData?: string;
   likeCount: number;
   dislikeCount: number;
   userReaction: FloorPlanReactionType | null;
@@ -76,6 +78,8 @@ type CreateFloorPlanInput = {
   contents: Buffer;
   uploaderName: string;
   uploaderEmail: string;
+  isPublic?: boolean;
+  studioData?: string;
 };
 
 type AddFloorPlanVersionInput = {
@@ -139,6 +143,8 @@ type FloorPlanMongoDocument = {
   uploaderName?: string;
   uploaderEmail?: string;
   uploadedAt?: Date | string;
+  isPublic?: boolean;
+  studioData?: string;
   versions?: FloorPlanMongoVersion[];
   reactions?: FloorPlanMongoReaction[];
   comments?: FloorPlanMongoComment[];
@@ -330,6 +336,8 @@ function toRecord(plan: FloorPlanMongoDocument, currentUserEmail?: string | null
     uploaderName: plan.uploaderName ?? plan.uploaderEmail ?? "User",
     uploaderEmail: plan.uploaderEmail ?? "",
     uploadedAt: latestVersion.uploadedAt,
+    isPublic: plan.isPublic ?? false,
+    studioData: plan.studioData,
     likeCount: reactions.filter((reaction) => reaction.type === "like").length,
     dislikeCount: reactions.filter((reaction) => reaction.type === "dislike").length,
     userReaction,
@@ -349,7 +357,10 @@ export function isAllowedFloorPlanFile(fileName: string) {
 export async function readFloorPlans(currentUserEmail?: string | null) {
   await connectDB();
 
-  const plans = await getPlansCollection().find().sort({ uploadedAt: -1 }).toArray();
+  const plans = await getPlansCollection()
+    .find({ isPublic: true })
+    .sort({ uploadedAt: -1 })
+    .toArray();
   return plans.map((plan) => toRecord(plan, currentUserEmail));
 }
 
@@ -447,6 +458,8 @@ export async function createFloorPlan(input: CreateFloorPlanInput) {
       uploaderName: input.uploaderName,
       uploaderEmail: normalizeEmail(input.uploaderEmail),
       uploadedAt: new Date(),
+      isPublic: input.isPublic ?? false,
+      ...(input.studioData ? { studioData: input.studioData } : {}),
       versions: [
         {
           _id: versionId,
@@ -672,6 +685,25 @@ export async function deleteFloorPlan(id: string, userEmailInput: string) {
   );
 
   return true;
+}
+
+export async function setFloorPlanPublic(id: string, userEmail: string, isPublic: boolean) {
+  if (!ObjectId.isValid(id)) return null;
+
+  await connectDB();
+
+  const planId = new ObjectId(id);
+  const plans = getPlansCollection();
+  const plan = await plans.findOne({ _id: planId });
+
+  if (!plan) return null;
+
+  if (normalizeEmail(plan.uploaderEmail) !== normalizeEmail(userEmail)) {
+    throw new FloorPlanInteractionError("not-owner", "Only the original uploader can publish or unpublish this plan.");
+  }
+
+  await plans.updateOne({ _id: planId }, { $set: { isPublic } });
+  return getFloorPlan(id, userEmail);
 }
 
 export async function setFloorPlanReaction(

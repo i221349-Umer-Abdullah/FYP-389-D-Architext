@@ -5,6 +5,7 @@ import { Canvas } from "@react-three/fiber";
 import { ContactShadows, OrbitControls } from "@react-three/drei";
 
 import { GenerationRoom, WorkflowState } from "@/lib/types";
+import { getStyle, type StyleId } from "@/lib/architectureStyles";
 import { ParticleBuildLoader } from "@/components/three/ParticleBuildLoader";
 import { RoomFloorPlanModel } from "@/components/three/RoomFloorPlanModel";
 import { StudioLights } from "@/components/three/StudioLights";
@@ -15,6 +16,7 @@ interface GeneratorCanvasProps {
   state: WorkflowState;
   rooms: GenerationRoom[] | null;
   label: string;
+  styleId?: StyleId;
 }
 
 function cameraForRooms(rooms: GenerationRoom[] | null) {
@@ -26,8 +28,9 @@ function cameraForRooms(rooms: GenerationRoom[] | null) {
   return { position: [dist, dist * 0.8, dist] as [number, number, number], fov: 42 };
 }
 
-export function GeneratorCanvas({ state, rooms, label }: GeneratorCanvasProps) {
-  const camera = useMemo(() => cameraForRooms(rooms), [rooms]);
+export function GeneratorCanvas({ state, rooms, label, styleId = "modern" }: GeneratorCanvasProps) {
+  const camera    = useMemo(() => cameraForRooms(rooms), [rooms]);
+  const canvasBg  = useMemo(() => getStyle(styleId).visuals.canvasBg, [styleId]);
   const showModel = state === "ready" && rooms && rooms.length > 0;
   const showLoader = state === "building";
 
@@ -40,8 +43,8 @@ export function GeneratorCanvas({ state, rooms, label }: GeneratorCanvasProps) {
         camera={camera}
         gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
       >
-        <color attach="background" args={["#F9F9F9"]} />
-        <fog attach="fog" args={["#F9F9F9", 28, 60]} />
+        <color attach="background" args={[canvasBg]} />
+        <fog attach="fog" args={[canvasBg, 28, 60]} />
         <Suspense fallback={null}>
           <StudioLights dramatic />
 
@@ -49,7 +52,7 @@ export function GeneratorCanvas({ state, rooms, label }: GeneratorCanvasProps) {
 
           {showModel && (
             <>
-              <RoomFloorPlanModel rooms={rooms} />
+              <RoomFloorPlanModel rooms={rooms} styleId={styleId} />
               <ContactShadows opacity={0.22} blur={2.5} far={12} width={24} height={24} position={[0, -0.1, 0]} />
             </>
           )}

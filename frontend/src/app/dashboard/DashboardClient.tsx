@@ -5,6 +5,7 @@ import {
   KeyboardEvent as ReactKeyboardEvent,
   MouseEvent,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -24,7 +25,8 @@ const FloorPlanJsonPreview = dynamic(
 
 type DashboardClientProps = {
   initialFloorPlans: FloorPlanRecord[];
-  mode?: "dashboard" | "floorPlans";
+  mode?: "dashboard" | "library";
+  currentUserEmail?: string;
 };
 
 type PreviewType = "image" | "pdf" | "json" | "unsupported";
@@ -205,7 +207,15 @@ function VersionIcon() {
   );
 }
 
-export function DashboardClient({ initialFloorPlans, mode = "floorPlans" }: DashboardClientProps) {
+function TrashIcon() {
+  return (
+    <svg className={styles.trashIcon} viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M9 3h6l1 2h4v2H4V5h4L9 3Zm-3 5h12l-1 13H7L6 8Zm4 2v9h1v-9h-1Zm3 0v9h1v-9h-1Z" />
+    </svg>
+  );
+}
+
+export function DashboardClient({ initialFloorPlans, mode = "library", currentUserEmail = "" }: DashboardClientProps) {
   const [floorPlans, setFloorPlans] = useState(initialFloorPlans);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
@@ -214,6 +224,8 @@ export function DashboardClient({ initialFloorPlans, mode = "floorPlans" }: Dash
   const [previewData, setPreviewData] = useState<unknown | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState("");
+  const [show3D, setShow3D] = useState(false);
+  const [isDownloadingIfc, setIsDownloadingIfc] = useState(false);
   const [interactionError, setInteractionError] = useState("");
   const [pendingReactionPlanId, setPendingReactionPlanId] = useState("");
   const [openCommentsPlanId, setOpenCommentsPlanId] = useState<string | null>(null);
@@ -227,6 +239,9 @@ export function DashboardClient({ initialFloorPlans, mode = "floorPlans" }: Dash
   const [editDrafts, setEditDrafts] = useState<Record<string, EditDraft>>({});
   const [pendingEditPlanId, setPendingEditPlanId] = useState("");
   const [pendingDeletePlanId, setPendingDeletePlanId] = useState("");
+  const [publishConfirmPlanId, setPublishConfirmPlanId] = useState("");
+  const [pendingPublishPlanId, setPendingPublishPlanId] = useState("");
+  const [myPlansOnly, setMyPlansOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [fileTypeFilter, setFileTypeFilter] = useState<FileTypeFilter>("all");
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
@@ -234,13 +249,21 @@ export function DashboardClient({ initialFloorPlans, mode = "floorPlans" }: Dash
   const [sortOption, setSortOption] = useState<SortOption>("newest");
   const formRef = useRef<HTMLFormElement | null>(null);
   const isDashboardMode = mode === "dashboard";
-  const showUpload = mode === "dashboard";
-  const showLibrary = mode === "dashboard" || mode === "floorPlans";
-  const floorPlansEndpoint = isDashboardMode ? "/api/floor-plans?mine=1" : "/api/floor-plans";
+  const isLibraryMode = mode === "library";
+  const showUpload = isDashboardMode;
+  const showLibrary = true;
+  // Dashboard syncs all public plans; library syncs the user's own plans
+  const floorPlansEndpoint = isDashboardMode ? "/api/floor-plans" : "/api/floor-plans?mine=1";
   const selectedPreviewType = selectedPlan ? getPreviewType(selectedPlan) : "unsupported";
+  const studioDataParsed = useMemo(() => {
+    if (!selectedPlan?.studioData) return null;
+    try { return JSON.parse(selectedPlan.studioData) as Record<string, unknown>; } catch { return null; }
+  }, [selectedPlan?.studioData]);
+  const isStudioPlan = Boolean(studioDataParsed?.format === "architext-studio-project");
   const normalizedSearch = searchQuery.trim().toLowerCase();
   const filteredFloorPlans = floorPlans
     .filter((plan) => {
+      if (isDashboardMode && myPlansOnly && plan.uploaderEmail !== currentUserEmail) return false;
       const searchableText = [
         plan.title,
         plan.description,
@@ -314,6 +337,7 @@ export function DashboardClient({ initialFloorPlans, mode = "floorPlans" }: Dash
 
   useEffect(() => {
     setInteractionError("");
+    setShow3D(false);
   }, [selectedPlan?.id]);
 
   useEffect(() => {
@@ -464,7 +488,7 @@ export function DashboardClient({ initialFloorPlans, mode = "floorPlans" }: Dash
         payload.floorPlan as FloorPlanRecord,
         ...currentPlans.filter((plan) => plan.id !== payload.floorPlan?.id),
       ]);
-      setStatus("Floor plan saved in MongoDB. It appears here and on the Floor Plans page.");
+      setStatus("Floor plan uploaded and published to the Dashboard.");
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "Could not upload floor plan.");
     } finally {
@@ -714,40 +738,74 @@ export function DashboardClient({ initialFloorPlans, mode = "floorPlans" }: Dash
   }
 
   async function handleDeletePlan(plan: FloorPlanRecord) {
-    if (!isDashboardMode || !plan.canUploadVersion) {
+    if (!plan.canUploadVersion) {
       setInteractionError("Only the original uploader can delete this floor plan.");
       return;
     }
 
-    const confirmed = window.confirm(
-      `Delete "${plan.title}" and all of its saved versions? This cannot be undone.`,
-    );
-
-    if (!confirmed) {
+    if (isDashboardMode) {
+      // Dashboard delete = unpublish (remove from public view, keep in library)
+      setInteractionError("");
+      setPendingDeletePlanId(plan.id);
+      try {
+        const response = await fetch(`/api/floor-plans/${plan.id}/publish`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isPublic: false }),
+        });
+        const payload = (await response.json().catch(() => ({}))) as { error?: string };
+        if (!response.ok) throw new Error(payload.error ?? "Could not remove from Dashboard.");
+        removeFloorPlanFromState(plan.id);
+        setStatus("Plan removed from Dashboard. It is still in your Library.");
+      } catch (err) {
+        setInteractionError(err instanceof Error ? err.message : "Could not remove from Dashboard.");
+      } finally {
+        setPendingDeletePlanId("");
+      }
       return;
     }
 
+    // Library delete = full permanent delete
+    const confirmed = window.confirm(
+      `Delete "${plan.title}" and all of its saved versions? This cannot be undone.`,
+    );
+    if (!confirmed) return;
+
     setInteractionError("");
     setPendingDeletePlanId(plan.id);
-
     try {
-      const response = await fetch(`/api/floor-plans/${plan.id}`, {
-        method: "DELETE",
-      });
+      const response = await fetch(`/api/floor-plans/${plan.id}`, { method: "DELETE" });
       const payload = (await response.json().catch(() => ({}))) as { error?: string };
-
-      if (!response.ok) {
-        throw new Error(payload.error ?? "Could not delete this floor plan.");
-      }
-
+      if (!response.ok) throw new Error(payload.error ?? "Could not delete this floor plan.");
       removeFloorPlanFromState(plan.id);
-      setStatus("Floor plan deleted from MongoDB.");
+      setStatus("Floor plan deleted.");
     } catch (deleteError) {
       setInteractionError(
         deleteError instanceof Error ? deleteError.message : "Could not delete this floor plan.",
       );
     } finally {
       setPendingDeletePlanId("");
+    }
+  }
+
+  async function handlePublishPlan(plan: FloorPlanRecord) {
+    setInteractionError("");
+    setPendingPublishPlanId(plan.id);
+    try {
+      const response = await fetch(`/api/floor-plans/${plan.id}/publish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isPublic: true }),
+      });
+      const payload = (await response.json()) as { floorPlan?: FloorPlanRecord; error?: string };
+      if (!response.ok || !payload.floorPlan) throw new Error(payload.error ?? "Could not publish.");
+      mergeUpdatedFloorPlan(payload.floorPlan);
+      setStatus("Plan published to Dashboard. Everyone can now see it.");
+    } catch (err) {
+      setInteractionError(err instanceof Error ? err.message : "Could not publish plan.");
+    } finally {
+      setPendingPublishPlanId("");
+      setPublishConfirmPlanId("");
     }
   }
 
@@ -819,7 +877,7 @@ export function DashboardClient({ initialFloorPlans, mode = "floorPlans" }: Dash
     );
   }
 
-  function renderCommentPanel(plan: FloorPlanRecord, mode: "inline" | "modal" = "inline") {
+  function renderCommentPanel(plan: FloorPlanRecord, mode: "inline" | "modal" = "inline", readOnly = false) {
     const commentDraft = commentDrafts[plan.id] ?? "";
     const isPostingComment = pendingCommentKey === `comment:${plan.id}`;
     const panelClassName = mode === "modal" ? styles.discussionSection : styles.inlineCommentPanel;
@@ -836,35 +894,43 @@ export function DashboardClient({ initialFloorPlans, mode = "floorPlans" }: Dash
             <p className={styles.kicker}>Comments</p>
             <h3 className={styles.discussionTitle}>Plan discussion</h3>
           </div>
-          {mode === "modal" ? renderReactionControls(plan) : null}
+          {mode === "modal" && !readOnly ? renderReactionControls(plan) : null}
+          {mode === "modal" && readOnly ? (
+            <div className={styles.reactionCounts}>
+              <span>{plan.likeCount} {plan.likeCount === 1 ? "like" : "likes"}</span>
+              <span>{plan.dislikeCount} {plan.dislikeCount === 1 ? "dislike" : "dislikes"}</span>
+            </div>
+          ) : null}
         </div>
 
-        <form className={styles.commentForm} onSubmit={(event) => handleCommentSubmit(event, plan)}>
-          <label className={styles.field}>
-            <span className={styles.label}>Add a comment</span>
-            <textarea
-              className={styles.textarea}
-              value={commentDraft}
-              maxLength={800}
-              rows={mode === "modal" ? 3 : 2}
-              placeholder="Share a review note for this floor plan."
-              disabled={isPostingComment}
-              onChange={(event) => updateCommentDraft(plan.id, event.target.value)}
-            />
-          </label>
-          <div className={styles.commentFormFooter}>
-            <span>{commentDraft.length}/800</span>
-            <button
-              type="submit"
-              className={styles.commentButton}
-              disabled={isPostingComment}
-              aria-label={isPostingComment ? "Posting comment" : "Post comment"}
-              title={isPostingComment ? "Posting" : "Post"}
-            >
-              <SendIcon />
-            </button>
-          </div>
-        </form>
+        {!readOnly ? (
+          <form className={styles.commentForm} onSubmit={(event) => handleCommentSubmit(event, plan)}>
+            <label className={styles.field}>
+              <span className={styles.label}>Add a comment</span>
+              <textarea
+                className={styles.textarea}
+                value={commentDraft}
+                maxLength={800}
+                rows={mode === "modal" ? 3 : 2}
+                placeholder="Share a review note for this floor plan."
+                disabled={isPostingComment}
+                onChange={(event) => updateCommentDraft(plan.id, event.target.value)}
+              />
+            </label>
+            <div className={styles.commentFormFooter}>
+              <span>{commentDraft.length}/800</span>
+              <button
+                type="submit"
+                className={styles.commentButton}
+                disabled={isPostingComment}
+                aria-label={isPostingComment ? "Posting comment" : "Post comment"}
+                title={isPostingComment ? "Posting" : "Post"}
+              >
+                <SendIcon />
+              </button>
+            </div>
+          </form>
+        ) : null}
 
         <div className={styles.commentList}>
           {plan.comments.length ? (
@@ -881,20 +947,22 @@ export function DashboardClient({ initialFloorPlans, mode = "floorPlans" }: Dash
                   </div>
                   <p>{comment.body}</p>
 
-                  <button
-                    type="button"
-                    className={styles.replyButton}
-                    aria-label={`Reply to ${comment.userName}`}
-                    title="Reply"
-                    onClick={(event) => {
-                      handleActionClick(event);
-                      setActiveReplyCommentId((currentId) =>
-                        currentId === comment.id ? "" : comment.id,
-                      );
-                    }}
-                  >
-                    <ReplyIcon />
-                  </button>
+                  {!readOnly ? (
+                    <button
+                      type="button"
+                      className={styles.replyButton}
+                      aria-label={`Reply to ${comment.userName}`}
+                      title="Reply"
+                      onClick={(event) => {
+                        handleActionClick(event);
+                        setActiveReplyCommentId((currentId) =>
+                          currentId === comment.id ? "" : comment.id,
+                        );
+                      }}
+                    >
+                      <ReplyIcon />
+                    </button>
+                  ) : null}
 
                   {comment.replies.length ? (
                     <div className={styles.replyList}>
@@ -910,7 +978,7 @@ export function DashboardClient({ initialFloorPlans, mode = "floorPlans" }: Dash
                     </div>
                   ) : null}
 
-                  {isReplying ? (
+                  {isReplying && !readOnly ? (
                     <form
                       className={styles.replyForm}
                       onSubmit={(event) => handleReplySubmit(event, plan, comment.id)}
@@ -942,7 +1010,7 @@ export function DashboardClient({ initialFloorPlans, mode = "floorPlans" }: Dash
               );
             })
           ) : (
-            <p className={styles.emptyComments}>No comments yet.</p>
+            <p className={styles.emptyComments}>{readOnly ? "No comments on this plan." : "No comments yet."}</p>
           )}
         </div>
       </section>
@@ -1099,10 +1167,47 @@ export function DashboardClient({ initialFloorPlans, mode = "floorPlans" }: Dash
     );
   }
 
+  async function downloadStudioIfc() {
+    if (!studioDataParsed) return;
+    const rooms = studioDataParsed.rooms as unknown[] | undefined;
+    if (!rooms?.length) return;
+    setIsDownloadingIfc(true);
+    try {
+      const api = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+      const res = await fetch(`${api}/api/ifc-from-rooms`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rooms, prompt: studioDataParsed.prompt }),
+      });
+      if (!res.ok) throw new Error("IFC generation failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "architext-floor-plan.ifc";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // silently ignore — user will see the button re-enable
+    } finally {
+      setIsDownloadingIfc(false);
+    }
+  }
+
   function renderPreviewContent(plan: FloorPlanRecord) {
     const viewUrl = `/api/floor-plans/${plan.id}/view`;
 
     if (selectedPreviewType === "image") {
+      // Studio-generated plans: show 2D floor plan image with 3D toggle
+      if (isStudioPlan) {
+        if (show3D && studioDataParsed) {
+          return <FloorPlanJsonPreview data={studioDataParsed} title={plan.title} />;
+        }
+        return (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={viewUrl} alt={plan.title} className={styles.previewImage} />
+        );
+      }
       return (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={viewUrl} alt={plan.title} className={styles.previewImage} />
@@ -1188,6 +1293,8 @@ export function DashboardClient({ initialFloorPlans, mode = "floorPlans" }: Dash
             />
           </label>
 
+          <input type="hidden" name="isPublic" value="true" />
+
           {error ? <p className={styles.error}>{error}</p> : null}
           {status ? <p className={styles.status}>{status}</p> : null}
 
@@ -1202,11 +1309,25 @@ export function DashboardClient({ initialFloorPlans, mode = "floorPlans" }: Dash
       <section className={styles.librarySection}>
         <div className={styles.libraryHeader}>
           <div>
-            <p className={styles.kicker}>{isDashboardMode ? "Your uploads" : "Download library"}</p>
+            <p className={styles.kicker}>{isDashboardMode ? "Public Repository" : "My Library"}</p>
             <h2 className={styles.sectionTitle}>
-              {isDashboardMode ? "Your floor plans" : "Available plans"}
+              {isDashboardMode ? "Public floor plans" : "Saved plans"}
             </h2>
+            <p className={styles.subtitle}>
+              {isDashboardMode
+                ? "All publicly shared floor plans. Upload above to contribute."
+                : "Floor plans you have saved. Publish any plan to share it on the Dashboard."}
+            </p>
           </div>
+          {isDashboardMode ? (
+            <button
+              type="button"
+              className={`${styles.ownerActionButton} ${myPlansOnly ? styles.reactionButtonActive : ""}`}
+              onClick={() => setMyPlansOnly((v) => !v)}
+            >
+              {myPlansOnly ? "All Plans" : "My Plans Only"}
+            </button>
+          ) : null}
         </div>
 
         <div className={styles.libraryTools} data-card-interactive="true">
@@ -1376,19 +1497,67 @@ export function DashboardClient({ initialFloorPlans, mode = "floorPlans" }: Dash
                       </button>
                       <button
                         type="button"
-                        className={styles.deleteButton}
+                        className={styles.ownerActionButton}
                         disabled={pendingDeletePlanId === plan.id}
                         onClick={(event) => {
                           handleActionClick(event);
                           void handleDeletePlan(plan);
                         }}
                       >
-                        {pendingDeletePlanId === plan.id ? "Deleting..." : "Delete Plan"}
+                        {pendingDeletePlanId === plan.id ? "Removing..." : "Remove from Dashboard"}
                       </button>
                     </div>
                   ) : null}
+                  {isLibraryMode && plan.canUploadVersion ? (
+                    <div className={styles.ownerActions} data-card-interactive="true">
+                      {plan.isPublic ? (
+                        <span className={styles.publicBadge}>Published to Dashboard</span>
+                      ) : publishConfirmPlanId === plan.id ? (
+                        <div className={styles.publishConfirm}>
+                          <p className={styles.publishConfirmText}>
+                            This will make your plan visible to everyone on the Dashboard. Are you sure?
+                          </p>
+                          <div className={styles.publishConfirmActions}>
+                            <button
+                              type="button"
+                              className={styles.versionUploadButton}
+                              disabled={pendingPublishPlanId === plan.id}
+                              onClick={(event) => {
+                                handleActionClick(event);
+                                void handlePublishPlan(plan);
+                              }}
+                            >
+                              {pendingPublishPlanId === plan.id ? "Publishing..." : "Yes, Publish"}
+                            </button>
+                            <button
+                              type="button"
+                              className={styles.ownerActionButton}
+                              disabled={pendingPublishPlanId === plan.id}
+                              onClick={(event) => {
+                                handleActionClick(event);
+                                setPublishConfirmPlanId("");
+                              }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className={styles.ownerActionButton}
+                          onClick={(event) => {
+                            handleActionClick(event);
+                            setPublishConfirmPlanId(plan.id);
+                          }}
+                        >
+                          Publish to Dashboard
+                        </button>
+                      )}
+                    </div>
+                  ) : null}
                   {editingPlanId === plan.id ? renderEditForm(plan) : null}
-                  {renderReactionControls(plan)}
+                  {isDashboardMode ? renderReactionControls(plan) : null}
                   <div className={styles.planActions}>
                     <button
                       type="button"
@@ -1406,20 +1575,38 @@ export function DashboardClient({ initialFloorPlans, mode = "floorPlans" }: Dash
                       download
                       onClick={handleActionClick}
                     >
-                    Download Plan
-                  </a>
+                      Download Plan
+                    </a>
                   </div>
                 </div>
-                {openCommentsPlanId === plan.id ? renderCommentPanel(plan) : null}
+                {openCommentsPlanId === plan.id && isDashboardMode ? renderCommentPanel(plan) : null}
                 {openVersionsPlanId === plan.id ? renderVersionPanel(plan) : null}
+                {isLibraryMode && plan.canUploadVersion ? (
+                  <button
+                    type="button"
+                    className={styles.trashCornerButton}
+                    aria-label="Delete plan"
+                    title="Delete plan"
+                    disabled={pendingDeletePlanId === plan.id}
+                    data-card-interactive="true"
+                    onClick={(event) => {
+                      handleActionClick(event);
+                      void handleDeletePlan(plan);
+                    }}
+                  >
+                    <TrashIcon />
+                  </button>
+                ) : null}
               </article>
             ))}
           </div>
         ) : (
           <p className={styles.emptyState}>
             {isDashboardMode
-              ? "You have not uploaded any floor plans yet."
-              : "No floor plans uploaded yet."}
+              ? myPlansOnly
+                ? "You have not published any floor plans to the Dashboard yet."
+                : "No public floor plans yet. Be the first to upload one above."
+              : "You have no saved floor plans yet. Generate one in the Studio to get started."}
           </p>
         )}
       </section>
@@ -1467,17 +1654,48 @@ export function DashboardClient({ initialFloorPlans, mode = "floorPlans" }: Dash
               </div>
             </dl>
 
+            {isStudioPlan && (
+              <div className={styles.previewToggleRow}>
+                <button
+                  type="button"
+                  className={`${styles.previewToggleBtn} ${!show3D ? styles.previewToggleActive : ""}`}
+                  onClick={() => setShow3D(false)}
+                >
+                  2D Floor Plan
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.previewToggleBtn} ${show3D ? styles.previewToggleActive : ""}`}
+                  onClick={() => setShow3D(true)}
+                >
+                  View in 3D
+                </button>
+              </div>
+            )}
+
             <div className={styles.previewShell}>{renderPreviewContent(selectedPlan)}</div>
 
-            {renderCommentPanel(selectedPlan, "modal")}
+            {renderCommentPanel(selectedPlan, "modal", isLibraryMode)}
 
-            <a
-              className={styles.downloadButton}
-              href={`/api/floor-plans/${selectedPlan.id}/download`}
-              download
-            >
-              Download Plan
-            </a>
+            <div className={styles.modalActions}>
+              <a
+                className={styles.downloadButton}
+                href={`/api/floor-plans/${selectedPlan.id}/download`}
+                download
+              >
+                Download Image
+              </a>
+              {isStudioPlan && (
+                <button
+                  type="button"
+                  className={styles.downloadButton}
+                  onClick={() => void downloadStudioIfc()}
+                  disabled={isDownloadingIfc}
+                >
+                  {isDownloadingIfc ? "Generating IFC..." : "Download IFC"}
+                </button>
+              )}
+            </div>
           </section>
         </div>
       ) : null}

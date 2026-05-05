@@ -33,13 +33,15 @@ export const PLUGINS: PluginInfo[] = [
     name: "Blender Plugin",
     eyebrow: "3D visualization",
     summary:
-      "Bring Architext layouts into Blender for fast visualization, presentation, and review.",
+      "Generate IFC floor plans directly inside Blender using natural language prompts.",
     description:
-      "The Blender plugin is planned for lightweight 3D review and presentation. It helps move generated spatial data into Blender so designers can inspect massing, materials, and scene composition outside the browser studio.",
+      "The Blender addon connects Architext's generation pipeline to Blender. Type a prompt, click Generate Building, and the addon calls the backend, exports an IFC file, and imports it into your scene — all without leaving Blender. Requires the Architext backend running locally and BlenderBIM for best IFC results.",
     details: [
-      "Import generated layout data into a Blender scene.",
-      "Create quick visual studies from Architext floor-plan geometry.",
-      "Use Blender as a presentation and rendering companion for generated plans.",
+      "Type a natural language prompt and generate a full IFC building model in one click.",
+      "Auto-imports the generated IFC into the current Blender scene.",
+      "Quick Generate mode: specify room counts directly for faster iteration.",
+      "Compatible with BlenderBIM for full IFC visibility and editing.",
+      "Requires Architext backend (localhost:8000) and Python venv configured in addon preferences.",
     ],
     downloadHref: "/plugins/architext-blender-plugin.zip",
     downloadLabel: "Download Blender Plugin",

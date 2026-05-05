@@ -1,0 +1,192 @@
+.panel {
+  margin-top: clamp(14px, 2vw, 24px);
+  border: 1px solid rgba(10, 10, 10, 0.14);
+  border-radius: 24px;
+  padding: clamp(18px, 2vw, 28px);
+  background: rgba(249, 249, 249, 0.82);
+}
+
+.panelTitle {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(10, 10, 10, 0.55);
+}
+
+.panelNote {
+  margin: 0 0 20px;
+  font-size: 11.5px;
+  color: rgba(10, 10, 10, 0.40);
+  line-height: 1.55;
+  max-width: 520px;
+}
+
+/* ── Side-by-side estimates ─────────────────────────────────────────────── */
+.estimatesRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 24px;
+}
+
+/* ── Single estimate ────────────────────────────────────────────────────── */
+.estimate {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.estimateLabel {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #111;
+}
+
+/* ── Cost hero ─────────────────────────────────────────────────────────── */
+.hero {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.heroRange {
+  font-size: clamp(20px, 3.5vw, 28px);
+  font-weight: 700;
+  color: #0A0A0A;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.heroBadges {
+  display: flex;
+  gap: 6px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 100px;
+  border: 1px solid rgba(10, 10, 10, 0.20);
+  font-size: 10.5px;
+  font-weight: 500;
+  color: rgba(10, 10, 10, 0.60);
+  background: rgba(10, 10, 10, 0.04);
+}
+
+.perSqm {
+  margin: 0 0 18px;
+  font-size: 11.5px;
+  color: rgba(10, 10, 10, 0.42);
+}
+
+/* ── Category bars ─────────────────────────────────────────────────────── */
+.categories {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.catRow {
+  display: grid;
+  grid-template-columns: 140px 1fr auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.catName {
+  font-size: 11.5px;
+  color: rgba(10, 10, 10, 0.65);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.barTrack {
+  height: 6px;
+  background: rgba(10, 10, 10, 0.07);
+  border-radius: 100px;
+  overflow: hidden;
+}
+
+.barFill {
+  height: 100%;
+  background: #0A0A0A;
+  border-radius: 100px;
+  transition: width 0.4s ease;
+}
+
+.catRange {
+  font-size: 10.5px;
+  color: rgba(10, 10, 10, 0.50);
+  white-space: nowrap;
+  text-align: right;
+  min-width: 130px;
+}
+
+/* ── Room breakdown toggle ──────────────────────────────────────────────── */
+.roomsToggle {
+  align-self: flex-start;
+  margin-bottom: 12px;
+}
+
+/* ── Room table ─────────────────────────────────────────────────────────── */
+.roomTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.roomTable th {
+  text-align: left;
+  padding: 5px 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(10, 10, 10, 0.40);
+  border-bottom: 1px solid rgba(10, 10, 10, 0.08);
+}
+
+.roomTable td {
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(10, 10, 10, 0.05);
+  vertical-align: middle;
+}
+
+.roomTable tr:last-child td {
+  border-bottom: none;
+}
+
+.roomName {
+  font-weight: 500;
+  color: #111;
+  text-transform: capitalize;
+}
+
+.roomArea {
+  color: rgba(10, 10, 10, 0.45);
+}
+
+.roomCost {
+  color: rgba(10, 10, 10, 0.70);
+  font-weight: 500;
+  text-align: right;
+}
+
+@media (max-width: 720px) {
+  .catRow {
+    grid-template-columns: 110px 1fr;
+    grid-template-rows: auto auto;
+  }
+
+  .catRange {
+    grid-column: 1 / -1;
+    text-align: left;
+    min-width: 0;
+  }
+}

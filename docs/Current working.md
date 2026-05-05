@@ -1,5 +1,100 @@
 ---
 
+# SESSION LOG — 2026-04-23
+
+## What We Did This Session
+
+### 1. Architecture walkthrough — how the three components connect
+Mapped the complete request flow for the panel presentation:
+- **Frontend (Next.js)** → `POST /api/generate` → polls `GET /api/status/{job_id}` every 1.5s
+- **Backend (FastAPI)** → creates job → runs AI pipeline as background task → serves PNG + IFC when done
+- **AI Pipeline** → two parallel paths: LLM (Groq/Llama) and GNN (T5 NLP → CVAE-GNN → room graph) → shared post-processing (validation → PNG → IFC export)
+
+Key files in the flow (exact):
+
+| Layer | File |
+|---|---|
+| Frontend workflow hook | `frontend/src/hooks/usePromptWorkflow.ts` |
+| Frontend 3D renderer | `frontend/src/components/three/RoomFloorPlanModel.tsx` |
+| Backend entry | `backend/main.py` |
+| Generate endpoint | `backend/api/routes/generate.py` |
+| Status endpoint | `backend/api/routes/status.py` |
+| Job manager | `backend/core/job_manager.py` |
+| Pipeline orchestrator | `backend/core/pipeline.py` |
+| NLP (T5) adapter | `backend/core/nlp_adapter.py` |
+| GNN inference | `backend/core/real_gnn.py` |
+| Trained GNN weights | `models/resplan_gnn/gnn_best.pt` (41 MB — the only weight file needed) |
+| T5 weights | `models/nlp_t5/final_model/` (232 MB — only this subfolder needed) |
+| LLM adapter | `backend/core/llm_adapter.py` |
+| IFC export | `backend/core/room_graph_to_ifc.py` + `scripts/generate_bim.py` |
+
+### 2. Transfer/deployment guide
+Established what to copy vs. skip when moving the project to another machine:
+
+**Skip** (rebuilt locally): `venv/` (9 GB), `frontend/node_modules/` (601 MB), `frontend/.next/`
+
+**Must copy**: `models/resplan_gnn/gnn_best.pt`, `models/nlp_t5/final_model/`, `.env`, `frontend/.env.local`
+
+**Skip within models/** (training artifacts, never loaded at runtime):
+- `models/resplan_gnn/gnn_epoch_*.pt` (21 checkpoint files × 41 MB = 861 MB)
+- `models/resplan_gnn/old/` (2.4 GB)
+- `models/nlp_t5/checkpoint-17400/` and `checkpoint-18870/` (1.4 GB total)
+- `models/cvae_gnn/` (1.7 GB — never referenced by backend)
+- `models/layout_gnn/` (36 MB — never referenced by backend)
+
+Result: 6.6 GB models folder → **273 MB** to actually transfer.
+
+Setup commands on new machine:
+```bash
+python -m venv venv && ./venv/Scripts/activate
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+pip install transformers fastapi uvicorn python-multipart python-dotenv
+pip install ifcopenshell matplotlib Pillow numpy networkx shapely scikit-learn openai groq
+cd frontend && npm install
+```
+
+### 3. 2D Floor Plan Editor — new feature implemented
+
+**New dependency**: `konva` + `react-konva` (installed into frontend)
+
+**New files created:**
+- `frontend/src/components/studio/FloorPlanEditor.tsx` — Konva canvas editor
+- `frontend/src/components/studio/FloorPlanEditor.module.css` — dark canvas + light modal styling
+
+**Modified files:**
+- `frontend/src/components/studio/StudioShell.tsx` — wired up edit state and editor overlay
+
+#### Feature flow
+1. After generation completes, an **"Edit 2D"** button appears under each 3D viewport
+2. Clicking it opens a modal overlay with a dark-background Konva canvas
+3. Rooms are rendered as colored rectangles — user can:
+   - **Click** to select (shows resize handles via Konva Transformer)
+   - **Drag** to reposition
+   - **Drag handles** to resize
+4. Clicking **"Apply to 3D"** closes the modal and the 3D viewport immediately re-renders with the edited layout
+5. Generating a new prompt resets all edits automatically
+
+#### Color scheme
+- All room fills are muted warm beige/brown — each type has a distinct hue lean:
+  - Living: straw yellow · Bedroom: dusty rose · Bathroom: slate blue · Kitchen: golden amber · Balcony: sage green · Dining: terracotta · Corridor/Storage: neutral greys
+- Edge color: `#5C4A3C` (dark warm brown) — uniform on all room rectangles
+- Corner dots: small filled circles at all 4 corners of each room, same dark brown as edges
+- Labels: dark brown text, auto-sized to fit room
+
+#### Snap-to-wall logic (two-axis, correct)
+On every drag release, if the dropped room is not already connected to any other room:
+1. Find the **nearest room** by axis-aligned bounding box distance (not global nearest wall pair)
+2. Find the **closest wall-to-wall alignment** against that room (4 candidates: each wall of dragged → nearest parallel wall of target)
+3. Apply the primary axis snap
+4. **Clamp the perpendicular axis** into a range that guarantees ≥ 0.3m of shared wall — this ensures actual visual wall contact, not just wall-flush-but-offset
+
+The snap is applied imperatively to the Konva node (`node.x()` / `node.y()` + `batchDraw()`) for immediate visual feedback, not deferred to React re-render.
+
+#### Bug fixed during development
+**Coordinate conversion offset** — `handleDragEnd` was converting canvas→meters as `node.x() / scale + minX`. Correct inverse of `cx = (room.x - minX) * scale + PAD` is `(node.x() - PAD) / scale + minX`. With `PAD = 52` and `scale ≈ 40 px/m`, the missing subtraction caused a ~1.3m drift to the bottom-right on every drop. Fixed by introducing `fromCanvasX` / `fromCanvasY` helpers.
+
+---
+
 # SESSION LOG — 2026-04-17
 
 ## What We Did This Session
