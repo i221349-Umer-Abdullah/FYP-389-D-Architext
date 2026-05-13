@@ -17,6 +17,8 @@ Configuration via environment variables (or .env file in project root):
   LLM_API_KEY    Your API key
   LLM_MODEL      Model name (see defaults below)
   LLM_BASE_URL   Base URL — required for openai_compatible
+  FALLBACK_LLM_PROVIDER / FALLBACK_LLM_API_KEY / FALLBACK_LLM_MODEL / FALLBACK_LLM_BASE_URL
+                 Optional backup provider used when the primary provider hits quota.
 
 Quickest free setup:
   Sign up at console.groq.com (no credit card) then set:
@@ -389,6 +391,18 @@ def _call_anthropic(prompt: str, api_key: str, model: str) -> str:
     return resp.content[0].text
 
 
+def _call_provider(prompt: str, provider: str, api_key: str, model: str,
+                   base_url: Optional[str] = None) -> str:
+    if provider == "anthropic":
+        return _call_anthropic(prompt, api_key, model)
+    if provider in ("openai", "openai_compatible"):
+        return _call_openai(prompt, api_key, model, base_url or None)
+    raise RuntimeError(
+        f"Unknown LLM_PROVIDER: '{provider}'. "
+        "Use openai, anthropic, or openai_compatible."
+    )
+
+
 # ── Public async interface ─────────────────────────────────────────────────────
 
 async def generate_room_layout(prompt: str) -> Dict[str, Any]:
@@ -408,11 +422,24 @@ async def generate_room_layout(prompt: str) -> Dict[str, Any]:
     model    = os.getenv("LLM_MODEL",    "")
     base_url = os.getenv("LLM_BASE_URL", "")
 
-    # Groq fallback — used automatically when the primary provider hits a quota error
+    fallback_provider = os.getenv("FALLBACK_LLM_PROVIDER", "").lower()
+    fallback_api_key  = os.getenv("FALLBACK_LLM_API_KEY",  "")
+    fallback_model    = os.getenv("FALLBACK_LLM_MODEL",    "")
+    fallback_base_url = os.getenv("FALLBACK_LLM_BASE_URL", "")
+
+    # Backward-compatible Groq fallback. This keeps older .env files working,
+    # but avoids retrying the same Groq key when Groq is already primary.
+    explicit_fallback = any([
+        fallback_provider, fallback_api_key, fallback_model, fallback_base_url
+    ])
     _groq_key      = os.getenv("GROQ_API_KEY",   "")
     _groq_model    = os.getenv("GROQ_MODEL",      "llama-3.3-70b-versatile")
     _groq_base_url = os.getenv("GROQ_BASE_URL",   "https://api.groq.com/openai/v1")
-    _has_groq      = bool(_groq_key)
+    if not explicit_fallback and _groq_key and _groq_key != api_key:
+        fallback_provider = "openai_compatible"
+        fallback_api_key  = _groq_key
+        fallback_model    = _groq_model
+        fallback_base_url = _groq_base_url
 
     # Auto-detect provider if not set
     if not provider:
@@ -446,6 +473,9 @@ async def generate_room_layout(prompt: str) -> Dict[str, Any]:
 
     if not model:
         model = _DEFAULTS.get(provider, "llama-3.3-70b-versatile")
+    if fallback_provider and not fallback_model:
+        fallback_model = _DEFAULTS.get(fallback_provider, "llama-3.3-70b-versatile")
+    has_fallback = bool(fallback_provider and fallback_api_key and fallback_model)
 
     # Append a randomly-chosen layout archetype to the user prompt.
     # This drives structural variety across repeated calls with the same input.
@@ -461,20 +491,12 @@ async def generate_room_layout(prompt: str) -> Dict[str, Any]:
         print(f"[LLM] Attempt {attempt}/3 via {provider}/{model}  [{variant[:55]}...]")
 
         try:
-            if provider == "anthropic":
-                raw = await loop.run_in_executor(
-                    None, lambda: _call_anthropic(augmented_prompt, api_key, model)
-                )
-            elif provider in ("openai", "openai_compatible"):
-                url = base_url or None
-                raw = await loop.run_in_executor(
-                    None, lambda: _call_openai(augmented_prompt, api_key, model, url)
-                )
-            else:
-                raise RuntimeError(
-                    f"Unknown LLM_PROVIDER: '{provider}'. "
-                    "Use openai, anthropic, or openai_compatible."
-                )
+            raw = await loop.run_in_executor(
+                None,
+                lambda: _call_provider(
+                    augmented_prompt, provider, api_key, model, base_url
+                ),
+            )
 
             print(f"[LLM] Response received ({len(raw)} chars)")
             data       = _extract_json(raw)
@@ -484,27 +506,34 @@ async def generate_room_layout(prompt: str) -> Dict[str, Any]:
             return room_graph
 
         except _QuotaExhausted as exc:
-            # Primary provider quota exhausted — try Groq fallback immediately (no retry)
+            # Primary provider quota exhausted — try configured fallback immediately.
             print(f"[LLM] Primary provider quota exhausted: {exc}")
-            if not _has_groq:
+            if not has_fallback:
                 raise RuntimeError(
-                    "Primary provider quota exhausted and no Groq fallback configured.\n"
-                    "Add GROQ_API_KEY to your .env file."
+                    "Primary provider quota exhausted and no fallback LLM configured.\n"
+                    "Add FALLBACK_LLM_PROVIDER, FALLBACK_LLM_API_KEY, "
+                    "FALLBACK_LLM_BASE_URL, and FALLBACK_LLM_MODEL to your .env file."
                 ) from exc
-            print(f"[LLM] Switching to Groq fallback ({_groq_model})...")
+            print(f"[LLM] Switching to fallback {fallback_provider}/{fallback_model}...")
             try:
                 raw = await loop.run_in_executor(
                     None,
-                    lambda: _call_openai(augmented_prompt, _groq_key, _groq_model, _groq_base_url),
+                    lambda: _call_provider(
+                        augmented_prompt,
+                        fallback_provider,
+                        fallback_api_key,
+                        fallback_model,
+                        fallback_base_url,
+                    ),
                 )
-                print(f"[LLM] Groq response received ({len(raw)} chars)")
+                print(f"[LLM] Fallback response received ({len(raw)} chars)")
                 data       = _extract_json(raw)
                 room_graph = _validate_room_graph(data)
-                print(f"[LLM] Groq fallback OK — {len(room_graph['rooms'])} rooms, "
+                print(f"[LLM] Fallback OK — {len(room_graph['rooms'])} rooms, "
                       f"total_area={room_graph['metadata']['total_area']}m²")
                 return room_graph
-            except Exception as groq_exc:
-                raise RuntimeError(f"Groq fallback failed: {groq_exc}") from groq_exc
+            except Exception as fallback_exc:
+                raise RuntimeError(f"Fallback LLM failed: {fallback_exc}") from fallback_exc
 
         except (ValueError, RuntimeError) as exc:
             last_error = exc
