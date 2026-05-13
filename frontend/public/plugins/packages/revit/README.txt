@@ -1,10 +1,12 @@
-Architext Revit Plugin Starter
+Architext Revit Plugin
 
-This starter package is a placeholder for the production Revit plugin build.
-Replace these files with the compiled Autodesk Revit add-in package when the
-desktop connector is ready.
+This package contains the Architext Revit add-in source, manifest, build script,
+and install script. Build it on the Revit machine using the .NET 8 SDK, then run
+install.ps1 to place the add-in under the Revit 2026 Addins folder.
 
-Planned workflow:
-- Import generated Architext room and wall data.
-- Map the imported layout to Revit levels and BIM elements.
-- Continue documentation and modeling inside Autodesk Revit.
+Workflow:
+- Click the ArchiText ribbon button in Revit.
+- Enter a natural language prompt.
+- Generate through the local FastAPI backend.
+- Default generator is Primary GNN; LLM Baseline is available for comparison.
+- Download and import/open the generated IFC in Revit.
