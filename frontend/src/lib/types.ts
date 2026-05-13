@@ -1,6 +1,11 @@
 export type WorkflowState = "idle" | "building" | "ready" | "error";
 export type GeneratorMode = "llm" | "gnn" | "both";
 
+export interface PlotConstraint {
+  width:  number;   // metres
+  height: number;   // metres
+}
+
 export type { StyleId, MaterialTier } from "@/lib/architectureStyles";
 
 export interface GenerationRoom {

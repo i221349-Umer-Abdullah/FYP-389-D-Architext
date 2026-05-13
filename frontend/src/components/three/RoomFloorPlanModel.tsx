@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useMemo } from "react";
-import { Edges } from "@react-three/drei";
+import { Edges, Html } from "@react-three/drei";
 
 import { GenerationRoom } from "@/lib/types";
 import { getStyle, type StyleId, type StyleVisuals } from "@/lib/architectureStyles";
@@ -66,6 +66,15 @@ function RoomFloorPlanModelComponent({ rooms, styleId = "modern" }: RoomFloorPla
   const vis   = useMemo(() => getStyle(styleId).visuals, [styleId]);
   const walls = useMemo(() => buildWalls(rooms, vis), [rooms, vis]);
 
+  const { cx, cy } = useMemo(() => {
+    if (!rooms.length) return { cx: 0, cy: 0 };
+    const minX = Math.min(...rooms.map((r) => r.x));
+    const minY = Math.min(...rooms.map((r) => r.y));
+    const maxX = Math.max(...rooms.map((r) => r.x + r.width));
+    const maxY = Math.max(...rooms.map((r) => r.y + r.height));
+    return { cx: (minX + maxX) / 2, cy: (minY + maxY) / 2 };
+  }, [rooms]);
+
   return (
     <group>
       {walls.map((w) => (
@@ -83,6 +92,34 @@ function RoomFloorPlanModelComponent({ rooms, styleId = "modern" }: RoomFloorPla
           />
         </mesh>
       ))}
+
+      {rooms.map((room, i) => {
+        const rx = room.x - cx;
+        const rz = room.y - cy;
+        return (
+          <Html
+            key={`label-${i}`}
+            position={[rx + room.width / 2, 0.2, rz + room.height / 2]}
+            center
+            style={{ pointerEvents: "none", whiteSpace: "nowrap", userSelect: "none" }}
+          >
+            <div style={{
+              background: "rgba(0,0,0,0.58)",
+              color: "#fff",
+              padding: "2px 6px",
+              borderRadius: 4,
+              fontSize: 11,
+              lineHeight: 1.45,
+              textAlign: "center",
+            }}>
+              <div style={{ fontWeight: 600 }}>{room.name}</div>
+              <div style={{ opacity: 0.82, fontSize: 10 }}>
+                {room.width.toFixed(1)}m × {room.height.toFixed(1)}m
+              </div>
+            </div>
+          </Html>
+        );
+      })}
     </group>
   );
 }

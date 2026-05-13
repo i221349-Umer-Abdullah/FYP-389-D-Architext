@@ -1,7 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import { PromptBar } from "@/components/hero/PromptBar";
-import { GeneratorMode, WorkflowState } from "@/lib/types";
+import { GeneratorMode, PlotConstraint, WorkflowState } from "@/lib/types";
+import type { StyleId } from "@/lib/architectureStyles";
+import { usePromptHistory } from "@/hooks/usePromptHistory";
+import { AreaInput } from "./AreaInput";
+import { StyleSelector } from "./StyleSelector";
 
 import styles from "./StudioPromptPanel.module.css";
 
@@ -26,6 +31,12 @@ interface StudioPromptPanelProps {
   show2D: boolean;
   onToggle2D: () => void;
   has2DResults: boolean;
+  plotConstraint: PlotConstraint | null;
+  onPlotChange: (dims: PlotConstraint | null) => void;
+  selectedStyle: StyleId;
+  onStyleChange: (id: StyleId) => void;
+  onExportPDF?: () => void;
+  isExportingPDF?: boolean;
 }
 
 export function StudioPromptPanel({
@@ -44,8 +55,27 @@ export function StudioPromptPanel({
   show2D,
   onToggle2D,
   has2DResults,
+  plotConstraint,
+  onPlotChange,
+  selectedStyle,
+  onStyleChange,
+  onExportPDF,
+  isExportingPDF = false,
 }: StudioPromptPanelProps) {
   const canSave = state === "ready" && Boolean(currentPrompt) && !isSavingProject;
+  const { history, addEntry, clearHistory } = usePromptHistory();
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  const handleSubmit = async (prompt: string) => {
+    addEntry(prompt);
+    await onSubmit(prompt);
+  };
+
+  const handleHistoryClick = async (entry: string) => {
+    if (state === "building") return;
+    addEntry(entry);
+    await onSubmit(entry);
+  };
 
   return (
     <aside className={styles.panel}>
@@ -67,12 +97,71 @@ export function StudioPromptPanel({
       </div>
 
       <PromptBar
-        onSubmit={onSubmit}
+        onSubmit={handleSubmit}
         disabled={state === "building"}
         buttonLabel={state === "building" ? "Building..." : "Build Plan"}
-        placeholder="Create a compact two-level plan with a double-height living volume and circulation around a central stair."
+        placeholder="e.g. 3 bedroom house in 10 marla, modern style with a veranda and parking"
         className={styles.prompt}
+        multiline
       />
+
+      {/* ── Advanced options toggle ─────────────────────────────────────── */}
+      <button
+        type="button"
+        className={styles.advancedToggle}
+        onClick={() => setShowAdvanced((v) => !v)}
+        aria-expanded={showAdvanced}
+      >
+        <span className={`${styles.chevron}${showAdvanced ? ` ${styles.chevronOpen}` : ""}`}>▼</span>
+        {showAdvanced ? "Hide options" : "Plot size, style & recent prompts"}
+      </button>
+
+      <div className={`${styles.advanced}${showAdvanced ? ` ${styles.advancedOpen}` : ""}`}>
+        <div className={styles.advancedInner}>
+          <AreaInput
+            value={plotConstraint}
+            onChange={onPlotChange}
+            disabled={state === "building"}
+          />
+
+          <StyleSelector
+            selectedStyle={selectedStyle}
+            onStyleChange={onStyleChange}
+            disabled={state === "building"}
+            showTier={false}
+          />
+
+          {history.length > 0 && (
+            <div className={styles.history}>
+              <div className={styles.historyHeader}>
+                <span className={styles.historyLabel}>Recent prompts</span>
+                <button
+                  type="button"
+                  className={styles.historyClear}
+                  onClick={clearHistory}
+                  aria-label="Clear history"
+                >
+                  Clear
+                </button>
+              </div>
+              <div className={styles.historyList}>
+                {history.map((entry, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    className={styles.historyChip}
+                    onClick={() => void handleHistoryClick(entry)}
+                    disabled={state === "building"}
+                    title={entry}
+                  >
+                    {entry.length > 38 ? entry.slice(0, 35) + "…" : entry}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
 
       {buildMessage ? (
         <p className={styles.buildMessage}>{buildMessage}</p>
@@ -107,6 +196,16 @@ export function StudioPromptPanel({
         >
           {isSavingProject ? "Saving..." : "Save to Library"}
         </button>
+        {onExportPDF && (
+          <button
+            type="button"
+            className="button-chip"
+            onClick={onExportPDF}
+            disabled={!has2DResults || isExportingPDF || state === "building"}
+          >
+            {isExportingPDF ? "Generating PDF..." : "Export PDF"}
+          </button>
+        )}
       </div>
 
       {saveError ? <p className={styles.saveError}>{saveError}</p> : null}

@@ -56,6 +56,120 @@
   color: rgba(10, 10, 10, 1);
 }
 
+/* ── Advanced options collapsible ───────────────────────────────────────── */
+.advancedToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 2px 0;
+  font-size: 0.78rem;
+  color: rgba(10, 10, 10, 0.5);
+  cursor: pointer;
+  transition: color 0.15s;
+  text-align: left;
+}
+
+.advancedToggle:hover {
+  color: rgba(10, 10, 10, 0.85);
+}
+
+.chevron {
+  font-size: 0.6rem;
+  display: inline-block;
+  transition: transform 0.22s ease;
+  line-height: 1;
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+.advanced {
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height 0.3s ease;
+}
+
+.advancedOpen {
+  max-height: 900px;
+}
+
+.advancedInner {
+  display: grid;
+  gap: 14px;
+  padding-top: 4px;
+}
+
+/* ── History ─────────────────────────────────────────────────────────────── */
+.history {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.historyHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.historyLabel {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  opacity: 0.6;
+}
+
+.historyClear {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.72rem;
+  color: rgba(10, 10, 10, 0.5);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.historyClear:hover {
+  color: rgba(10, 10, 10, 0.85);
+}
+
+.historyList {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 168px;
+  overflow-y: auto;
+}
+
+.historyChip {
+  background: rgba(10, 10, 10, 0.05);
+  border: 1px solid rgba(10, 10, 10, 0.1);
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 0.78rem;
+  color: rgba(10, 10, 10, 0.8);
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.historyChip:hover:not(:disabled) {
+  background: rgba(10, 10, 10, 0.09);
+  border-color: rgba(10, 10, 10, 0.2);
+}
+
+.historyChip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;

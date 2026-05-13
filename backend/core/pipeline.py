@@ -13,6 +13,8 @@ throughout so the status endpoint can report real-time progress.
 
 import os
 import sys
+import math as _math
+import re as _re
 import asyncio
 from pathlib import Path
 from typing import Optional
@@ -37,6 +39,45 @@ DEFAULT_GENERATOR_MODE = os.getenv("GENERATOR_MODE", "llm")
 IFC_OUTPUT_DIR = _ROOT / "output" / "api_generated"
 PNG_OUTPUT_DIR = _ROOT / "output" / "api_generated"
 IFC_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+def _extract_plot_from_text(text: str):
+    """
+    Return (plot_w, plot_h) in metres if a plot size is mentioned in the text,
+    otherwise return (None, None). Uses aspect ratio 1.8 (width:depth) for
+    area-based units, matching the frontend plotUnits.ts conversion.
+    """
+    ASPECT = 1.8
+
+    def area_to_dims(area_m2: float):
+        h = _math.sqrt(area_m2 / ASPECT)
+        return round(h * ASPECT, 2), round(h, 2)
+
+    # Marla  (1 marla = 25.2929 m²)
+    m = _re.search(r'(\d+(?:\.\d+)?)\s*marla', text, _re.IGNORECASE)
+    if m:
+        return area_to_dims(float(m.group(1)) * 25.2929)
+
+    # Kanal  (1 kanal = 505.857 m²)
+    m = _re.search(r'(\d+(?:\.\d+)?)\s*kanal', text, _re.IGNORECASE)
+    if m:
+        return area_to_dims(float(m.group(1)) * 505.857)
+
+    # Square metres: "150 sqm", "150 m²", "150 sq m", "150 square metres"
+    m = _re.search(
+        r'(\d+(?:\.\d+)?)\s*(?:sqm|m²|sq\.?\s*m|square\s*met(?:re|er)s?)',
+        text, _re.IGNORECASE)
+    if m:
+        return area_to_dims(float(m.group(1)))
+
+    # Metres × metres: "10m x 8m", "10 by 8 metres", "10×8m"
+    m = _re.search(
+        r'(\d+(?:\.\d+)?)\s*m?\s*[x×by]\s*(\d+(?:\.\d+)?)\s*m',
+        text, _re.IGNORECASE)
+    if m:
+        return float(m.group(1)), float(m.group(2))
+
+    return None, None
+
 
 # Shared GNN instance
 _gnn = get_real_gnn()
@@ -119,6 +160,9 @@ def _validate_and_fix(room_graph: dict, spec: dict) -> dict:
             })
             insert_y += h + 0.5
 
+    # 3b. Close gaps introduced by the LLM before testing connectivity
+    rooms = _close_gaps(rooms, max_gap=8.0)
+
     # 4. Connectivity enforcement — every room must share an edge with at least one other
     if len(rooms) > 1:
         # Build undirected adjacency graph (index-based)
@@ -170,6 +214,9 @@ def _validate_and_fix(room_graph: dict, spec: dict) -> dict:
                 # Add to main cluster so subsequent rooms can snap to it
                 main_indices.add(iso_idx)
 
+    # 4b. Close any residual gaps left after snapping
+    rooms = _close_gaps(rooms, max_gap=2.0)
+
     # 5. Normalize: shift all rooms so minimum x and y are ≥ 0.
     #    Prevents negative-coordinate rooms from being clamped to 0 in downstream
     #    consumers (e.g. room_graph_to_ifc._validate), which causes 3D overlap.
@@ -214,37 +261,122 @@ def _rooms_are_adjacent(a: dict, b: dict, tol: float = 0.6) -> bool:
 
 def _snap_to_adjacent(isolated: dict, anchor: dict) -> None:
     """
-    Move `isolated` room so it sits flush against `anchor` on the nearest side.
-    Modifies isolated room's x/y in-place.
+    Move `isolated` room flush against `anchor` using the axis with the smaller gap.
+    When x-ranges overlap, snap vertically; when y-ranges overlap, snap horizontally;
+    otherwise snap on whichever axis has the smaller gap.
     """
-    ax1, ax2 = anchor["x"], anchor["x"] + anchor["width"]
-    ay1, ay2 = anchor["y"], anchor["y"] + anchor["height"]
+    ax1, ax2 = anchor["x"],   anchor["x"]   + anchor["width"]
+    ay1, ay2 = anchor["y"],   anchor["y"]   + anchor["height"]
     ix1, ix2 = isolated["x"], isolated["x"] + isolated["width"]
     iy1, iy2 = isolated["y"], isolated["y"] + isolated["height"]
 
-    # Find which side of anchor is closest to isolated room centre
-    icx = (ix1 + ix2) / 2
-    icy = (iy1 + iy2) / 2
+    x_overlap = min(ix2, ax2) - max(ix1, ax1)
+    y_overlap = min(iy2, ay2) - max(iy1, ay1)
 
-    dist_left  = abs(icx - ax1)
-    dist_right = abs(icx - ax2)
-    dist_top   = abs(icy - ay2)
-    dist_bot   = abs(icy - ay1)
-
-    best = min(dist_left, dist_right, dist_top, dist_bot)
-
-    if best == dist_right:
-        isolated["x"] = round(ax2, 2)
-        isolated["y"] = round(ay1, 2)
-    elif best == dist_left:
-        isolated["x"] = round(ax1 - isolated["width"], 2)
-        isolated["y"] = round(ay1, 2)
-    elif best == dist_top:
-        isolated["y"] = round(ay2, 2)
-        isolated["x"] = round(ax1, 2)
+    if x_overlap > 0:
+        # Rooms share an x-band → snap vertically (up or down)
+        if iy1 >= ay2:
+            isolated["y"] = round(ay2, 2)
+        else:
+            isolated["y"] = round(ay1 - isolated["height"], 2)
+    elif y_overlap > 0:
+        # Rooms share a y-band → snap horizontally (left or right)
+        if ix1 >= ax2:
+            isolated["x"] = round(ax2, 2)
+        else:
+            isolated["x"] = round(ax1 - isolated["width"], 2)
     else:
-        isolated["y"] = round(ay1 - isolated["height"], 2)
-        isolated["x"] = round(ax1, 2)
+        # Diagonal — snap on the axis with the smaller gap, align other axis to anchor edge
+        h_gap = max(ix1 - ax2, ax1 - ix2)
+        v_gap = max(iy1 - ay2, ay1 - iy2)
+        if h_gap <= v_gap:
+            isolated["x"] = round(ax2, 2) if ix1 >= ax2 else round(ax1 - isolated["width"], 2)
+            isolated["y"] = round(ay1, 2)
+        else:
+            isolated["y"] = round(ay2, 2) if iy1 >= ay2 else round(ay1 - isolated["height"], 2)
+            isolated["x"] = round(ax1, 2)
+
+
+def _close_gaps(rooms: list, max_gap: float = 3.0) -> list:
+    """
+    Slide rooms flush against each other to eliminate internal gaps introduced
+    by the LLM.  Only moves a room toward a neighbour when:
+      - They share significant overlap on the perpendicular axis (≥ 0.3 m)
+      - The gap on the snap axis is ≤ max_gap
+      - The move would not create an overlap with any other room
+    Runs in alternating x / y passes until stable (max 30 iterations).
+    """
+    if len(rooms) < 2:
+        return rooms
+
+    TOUCH = 0.05  # gap threshold considered "already touching"
+
+    def true_overlap(r, others):
+        rx1, rx2 = r["x"], r["x"] + r["width"]
+        ry1, ry2 = r["y"], r["y"] + r["height"]
+        for o in others:
+            if o is r:
+                continue
+            ox1, ox2 = o["x"], o["x"] + o["width"]
+            oy1, oy2 = o["y"], o["y"] + o["height"]
+            if (rx2 - ox1 > TOUCH and ox2 - rx1 > TOUCH and
+                    ry2 - oy1 > TOUCH and oy2 - ry1 > TOUCH):
+                return True
+        return False
+
+    for _ in range(30):
+        moved = False
+
+        # ── Y-axis: slide rooms downward (toward lower y) ────────────────────
+        for r in sorted(rooms, key=lambda r: r["y"]):
+            ry1 = r["y"]
+            rx1, rx2 = r["x"], r["x"] + r["width"]
+            best_top = None          # highest y-top among valid lower neighbours
+            for o in rooms:
+                if o is r:
+                    continue
+                oy2 = o["y"] + o["height"]
+                ox1, ox2 = o["x"], o["x"] + o["width"]
+                x_ov = min(rx2, ox2) - max(rx1, ox1)
+                if x_ov >= 0.3 and oy2 <= ry1 + 0.01:
+                    gap = ry1 - oy2
+                    if gap <= max_gap:
+                        best_top = oy2 if best_top is None else max(best_top, oy2)
+            if best_top is not None and ry1 - best_top > TOUCH:
+                old = r["y"]
+                r["y"] = round(best_top, 2)
+                if true_overlap(r, rooms):
+                    r["y"] = old
+                else:
+                    moved = True
+
+        # ── X-axis: slide rooms leftward (toward lower x) ────────────────────
+        for r in sorted(rooms, key=lambda r: r["x"]):
+            rx1 = r["x"]
+            ry1, ry2 = r["y"], r["y"] + r["height"]
+            best_right = None
+            for o in rooms:
+                if o is r:
+                    continue
+                ox2 = o["x"] + o["width"]
+                oy1, oy2 = o["y"], o["y"] + o["height"]
+                y_ov = min(ry2, oy2) - max(ry1, oy1)
+                if y_ov >= 0.3 and ox2 <= rx1 + 0.01:
+                    gap = rx1 - ox2
+                    if gap <= max_gap:
+                        best_right = ox2 if best_right is None else max(best_right, ox2)
+            if best_right is not None and rx1 - best_right > TOUCH:
+                old = r["x"]
+                r["x"] = round(best_right, 2)
+                if true_overlap(r, rooms):
+                    r["x"] = old
+                else:
+                    moved = True
+
+        if not moved:
+            break
+
+    return rooms
 
 
 _ROOM_COLOURS = {
@@ -304,7 +436,9 @@ def _render_png(room_graph: dict, output_path: str) -> None:
 
 
 async def run_pipeline(job: Job, project_name: Optional[str] = None,
-                       generator_mode: Optional[str] = None) -> None:
+                       generator_mode: Optional[str] = None,
+                       plot_width: Optional[float] = None,
+                       plot_height: Optional[float] = None) -> None:
     """
     Run the full 4-layer pipeline for a given job.
     Updates job.status, job.progress, and job.preview throughout.
@@ -357,6 +491,20 @@ async def run_pipeline(job: Job, project_name: Optional[str] = None,
         await asyncio.sleep(0)
 
         room_graph = _validate_and_fix(room_graph, spec)
+
+        # ── Layer 3.5: Plot constraint fitting ────────────────────────────────
+        # If no explicit dimensions, try to extract from the prompt text
+        if not (plot_width and plot_height):
+            _pw, _ph = _extract_plot_from_text(job.text)
+            if _pw and _ph:
+                plot_width, plot_height = _pw, _ph
+
+        if plot_width and plot_height:
+            job.update(JobStatus.PROCESSING, "Fitting layout to plot dimensions...", 75)
+            await asyncio.sleep(0)
+            from backend.core.plot_fitter import fit_rooms_to_plot
+            fitted = fit_rooms_to_plot(room_graph["rooms"], plot_width, plot_height)
+            room_graph["rooms"] = fitted
 
         # Lazy import of adapter (backend/core/room_graph_to_ifc.py)
         from backend.core.room_graph_to_ifc import RoomGraphToIFC

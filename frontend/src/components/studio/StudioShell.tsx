@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { usePromptWorkflow } from "@/hooks/usePromptWorkflow";
@@ -10,7 +10,6 @@ import { createFileSlug } from "@/lib/projectExport";
 
 import { GenerationStatus } from "./GenerationStatus";
 import { StudioPromptPanel } from "./StudioPromptPanel";
-import { StyleSelector } from "./StyleSelector";
 import { CostBreakdownPanel } from "./CostBreakdownPanel";
 import { FloorPlanEditor } from "./FloorPlanEditor";
 import styles from "./StudioShell.module.css";
@@ -30,43 +29,69 @@ const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export function StudioShell() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const initialPromptUsed = useRef(false);
   const {
     state, currentPrompt, mode, setMode,
     selectedStyle, setSelectedStyle,
     selectedTier, setSelectedTier,
+    plotConstraint, setPlotConstraint,
     llmResult, gnnResult, buildMessage,
     submitPrompt, reset,
   } = usePromptWorkflow();
   const [isSavingProject, setIsSavingProject] = useState(false);
   const [saveMessage, setSaveMessage]         = useState("");
   const [saveError, setSaveError]             = useState("");
+  const [isExportingPDF, setIsExportingPDF]   = useState(false);
   const [show2D, setShow2D]                   = useState(false);
   const [showCost, setShowCost]               = useState(false);
   const [editingGenerator, setEditingGenerator] = useState<"llm" | "gnn" | null>(null);
-  const [editedLlmRooms, setEditedLlmRooms]   = useState<import("@/lib/types").GenerationRoom[] | null>(null);
-  const [editedGnnRooms, setEditedGnnRooms]   = useState<import("@/lib/types").GenerationRoom[] | null>(null);
-  const [downloadingIfc, setDownloadingIfc]   = useState<"llm" | "gnn" | null>(null);
+  const [editedLlmRooms, setEditedLlmRooms]         = useState<import("@/lib/types").GenerationRoom[] | null>(null);
+  const [editedGnnRooms, setEditedGnnRooms]         = useState<import("@/lib/types").GenerationRoom[] | null>(null);
+  const [editedLlmPreviewUrl, setEditedLlmPreviewUrl] = useState<string | null>(null);
+  const [editedGnnPreviewUrl, setEditedGnnPreviewUrl] = useState<string | null>(null);
+  const [downloadingIfc, setDownloadingIfc]         = useState<"llm" | "gnn" | null>(null);
 
   useEffect(() => {
     if (initialPromptUsed.current) return;
     const seededPrompt = searchParams.get("prompt");
     if (seededPrompt?.trim()) {
       initialPromptUsed.current = true;
+      router.replace("/studio", { scroll: false });
       void submitPrompt(seededPrompt);
     }
-  }, [searchParams, submitPrompt]);
+  }, [searchParams, submitPrompt, router]);
 
   useEffect(() => {
     if (state === "building") {
       setEditedLlmRooms(null);
       setEditedGnnRooms(null);
+      setEditedLlmPreviewUrl(null);
+      setEditedGnnPreviewUrl(null);
       setShowCost(false);
     }
     if (state === "ready") {
       setShowCost(true);
     }
   }, [state]);
+
+  async function regeneratePreview(
+    rooms: import("@/lib/types").GenerationRoom[],
+    setUrl: (url: string) => void,
+  ) {
+    try {
+      const res = await fetch(`${API}/api/preview-from-rooms`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rooms }),
+      });
+      if (!res.ok) return;
+      const blob = await res.blob();
+      setUrl(URL.createObjectURL(blob));
+    } catch {
+      // silently ignore — original preview remains visible
+    }
+  }
 
   async function downloadIfc(source: "llm" | "gnn") {
     const result      = source === "llm" ? llmResult : gnnResult;
@@ -155,6 +180,28 @@ export function StudioShell() {
     }
   }
 
+  async function handleExportPDF() {
+    if (isExportingPDF) return;
+    setIsExportingPDF(true);
+    try {
+      const { exportFloorplanPDF } = await import("@/lib/pdfReport");
+      await exportFloorplanPDF({
+        prompt:            currentPrompt,
+        plotConstraint,
+        llmResult,
+        gnnResult,
+        llmRooms:          editedLlmRooms,
+        gnnRooms:          editedGnnRooms,
+        llmPreviewOverride: editedLlmPreviewUrl ?? undefined,
+        gnnPreviewOverride: editedGnnPreviewUrl ?? undefined,
+      });
+    } catch (err) {
+      console.error("PDF export failed:", err);
+    } finally {
+      setIsExportingPDF(false);
+    }
+  }
+
   const showLlm = mode === "llm" || mode === "both";
   const showGnn = mode === "gnn" || mode === "both";
   const hasResults = (llmResult ?? gnnResult) !== null;
@@ -181,14 +228,12 @@ export function StudioShell() {
               show2D={show2D}
               onToggle2D={() => setShow2D((v) => !v)}
               has2DResults={hasResults}
-            />
-
-            <StyleSelector
+              plotConstraint={plotConstraint}
+              onPlotChange={setPlotConstraint}
               selectedStyle={selectedStyle}
-              selectedTier={selectedTier}
               onStyleChange={setSelectedStyle}
-              onTierChange={setSelectedTier}
-              disabled={state === "building"}
+              onExportPDF={() => void handleExportPDF()}
+              isExportingPDF={isExportingPDF}
             />
           </div>
 
@@ -205,6 +250,7 @@ export function StudioShell() {
                     rooms={editedLlmRooms ?? llmResult?.rooms ?? null}
                     label="Primary Generator"
                     styleId={llmResult?.styleId ?? selectedStyle}
+                    plotConstraint={plotConstraint}
                   />
                   <div className={styles.viewportFooter}>
                     <span className={styles.viewportMeta}>
@@ -240,6 +286,7 @@ export function StudioShell() {
                     rooms={editedGnnRooms ?? gnnResult?.rooms ?? null}
                     label="Competition"
                     styleId={gnnResult?.styleId ?? selectedStyle}
+                    plotConstraint={plotConstraint}
                   />
                   <div className={styles.viewportFooter}>
                     <span className={styles.viewportMeta}>
@@ -274,7 +321,11 @@ export function StudioShell() {
         {editingGenerator === "llm" && llmResult && (
           <FloorPlanEditor
             rooms={editedLlmRooms ?? llmResult.rooms}
-            onComplete={(updated) => { setEditedLlmRooms(updated); setEditingGenerator(null); }}
+            onComplete={(updated) => {
+              setEditedLlmRooms(updated);
+              setEditingGenerator(null);
+              void regeneratePreview(updated, setEditedLlmPreviewUrl);
+            }}
             onCancel={() => setEditingGenerator(null)}
           />
         )}
@@ -282,33 +333,49 @@ export function StudioShell() {
         {editingGenerator === "gnn" && gnnResult && (
           <FloorPlanEditor
             rooms={editedGnnRooms ?? gnnResult.rooms}
-            onComplete={(updated) => { setEditedGnnRooms(updated); setEditingGenerator(null); }}
+            onComplete={(updated) => {
+              setEditedGnnRooms(updated);
+              setEditingGenerator(null);
+              void regeneratePreview(updated, setEditedGnnPreviewUrl);
+            }}
             onCancel={() => setEditingGenerator(null)}
           />
         )}
 
-        {/* ── 2D PNG preview cards ── */}
+        {/* ── 2D PNG preview cards — shown first, above cost ── */}
         {show2D && hasResults && (
           <div className={styles.floorPlanCard}>
             <p className={styles.floorPlanTitle}>2D Floor Plans</p>
             <div className={styles.floorPlanRow}>
               {llmResult && (
                 <div className={styles.floorPlanItem}>
-                  <span className={styles.floorPlanLabel}>Primary Generator</span>
+                  <span className={styles.floorPlanLabel}>
+                    Primary Generator{editedLlmPreviewUrl ? " (edited)" : ""}
+                  </span>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={llmResult.previewUrl} alt="Primary Generator 2D floor plan" className={styles.floorPlanImg} />
+                  <img
+                    src={editedLlmPreviewUrl ?? llmResult.previewUrl}
+                    alt="Primary Generator 2D floor plan"
+                    className={styles.floorPlanImg}
+                  />
                   <span className={styles.floorPlanMeta}>
-                    {llmResult.roomCount} rooms · {llmResult.totalAreaM2.toFixed(1)} m²
+                    {(editedLlmRooms ?? llmResult.rooms).length} rooms · {llmResult.totalAreaM2.toFixed(1)} m²
                   </span>
                 </div>
               )}
               {gnnResult && (
                 <div className={styles.floorPlanItem}>
-                  <span className={styles.floorPlanLabel}>Competition</span>
+                  <span className={styles.floorPlanLabel}>
+                    Competition{editedGnnPreviewUrl ? " (edited)" : ""}
+                  </span>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={gnnResult.previewUrl} alt="Competition 2D floor plan" className={styles.floorPlanImg} />
+                  <img
+                    src={editedGnnPreviewUrl ?? gnnResult.previewUrl}
+                    alt="Competition 2D floor plan"
+                    className={styles.floorPlanImg}
+                  />
                   <span className={styles.floorPlanMeta}>
-                    {gnnResult.roomCount} rooms · {gnnResult.totalAreaM2.toFixed(1)} m²
+                    {(editedGnnRooms ?? gnnResult.rooms).length} rooms · {gnnResult.totalAreaM2.toFixed(1)} m²
                   </span>
                 </div>
               )}
@@ -316,11 +383,13 @@ export function StudioShell() {
           </div>
         )}
 
-        {/* ── Cost breakdown panel ── */}
+        {/* ── Cost breakdown panel (includes material tier selector) ── */}
         {showCost && hasResults && (
           <CostBreakdownPanel
             llmResult={llmResult}
             gnnResult={gnnResult}
+            selectedTier={selectedTier}
+            onTierChange={setSelectedTier}
           />
         )}
       </div>

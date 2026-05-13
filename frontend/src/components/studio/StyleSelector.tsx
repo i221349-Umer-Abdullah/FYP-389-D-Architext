@@ -11,18 +11,20 @@ import styles from "./StyleSelector.module.css";
 
 interface StyleSelectorProps {
   selectedStyle: StyleId;
-  selectedTier: MaterialTier;
   onStyleChange: (id: StyleId) => void;
-  onTierChange: (tier: MaterialTier) => void;
+  selectedTier?: MaterialTier;
+  onTierChange?: (tier: MaterialTier) => void;
   disabled?: boolean;
+  showTier?: boolean;
 }
 
 export function StyleSelector({
   selectedStyle,
-  selectedTier,
   onStyleChange,
+  selectedTier,
   onTierChange,
   disabled = false,
+  showTier = true,
 }: StyleSelectorProps) {
   return (
     <div className={`${styles.root}${disabled ? ` ${styles.disabled}` : ""}`}>
@@ -61,23 +63,24 @@ export function StyleSelector({
         })}
       </div>
 
-      <p className={styles.sectionLabel} style={{ marginTop: 18 }}>Material Tier</p>
-      <div className={styles.tierRow}>
-        {(Object.keys(MATERIAL_TIER_MULTIPLIERS) as MaterialTier[]).map((tier) => {
-          const info = MATERIAL_TIER_MULTIPLIERS[tier];
-          return (
-            <button
-              key={tier}
-              type="button"
-              disabled={disabled}
-              onClick={() => onTierChange(tier)}
-              className={`button-chip${selectedTier === tier ? " button-chip-solid" : ""}`}
-            >
-              {info.label}
-            </button>
-          );
-        })}
-      </div>
+      {showTier && selectedTier !== undefined && onTierChange && (
+        <>
+          <p className={styles.sectionLabel} style={{ marginTop: 18 }}>Material Tier</p>
+          <div className={styles.tierRow}>
+            {(Object.keys(MATERIAL_TIER_MULTIPLIERS) as MaterialTier[]).map((tier) => (
+              <button
+                key={tier}
+                type="button"
+                disabled={disabled}
+                onClick={() => onTierChange(tier)}
+                className={`button-chip${selectedTier === tier ? " button-chip-solid" : ""}`}
+              >
+                {MATERIAL_TIER_MULTIPLIERS[tier].label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { GenerationResult, GeneratorMode, WorkflowState } from "@/lib/types";
+import { GenerationResult, GeneratorMode, PlotConstraint, WorkflowState } from "@/lib/types";
 import {
   DEFAULT_MATERIAL_TIER,
   DEFAULT_STYLE_ID,
@@ -13,11 +13,20 @@ const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const POLL_INTERVAL_MS = 1500;
 const POLL_TIMEOUT_MS  = 120_000;
 
-async function startJob(prompt: string, mode: "llm" | "gnn"): Promise<string> {
+async function startJob(
+  prompt: string,
+  mode: "llm" | "gnn",
+  plot: PlotConstraint | null,
+): Promise<string> {
+  const body: Record<string, unknown> = { text: prompt, generator_mode: mode };
+  if (plot) {
+    body.plot_width  = plot.width;
+    body.plot_height = plot.height;
+  }
   const res = await fetch(`${API}/api/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text: prompt, generator_mode: mode }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`Backend error ${res.status}`);
   const data = (await res.json()) as { job_id: string };
@@ -68,6 +77,8 @@ interface UsePromptWorkflowResult {
   setSelectedStyle: (id: StyleId) => void;
   selectedTier: MaterialTier;
   setSelectedTier: (t: MaterialTier) => void;
+  plotConstraint: PlotConstraint | null;
+  setPlotConstraint: (p: PlotConstraint | null) => void;
   llmResult: GenerationResult | null;
   gnnResult: GenerationResult | null;
   buildMessage: string;
@@ -81,6 +92,7 @@ export function usePromptWorkflow(): UsePromptWorkflowResult {
   const [mode, setMode]                 = useState<GeneratorMode>("both");
   const [selectedStyle, setSelectedStyle] = useState<StyleId>(DEFAULT_STYLE_ID);
   const [selectedTier, setSelectedTier]   = useState<MaterialTier>(DEFAULT_MATERIAL_TIER);
+  const [plotConstraint, setPlotConstraint] = useState<PlotConstraint | null>(null);
   const [llmResult, setLlmResult]       = useState<GenerationResult | null>(null);
   const [gnnResult, setGnnResult]       = useState<GenerationResult | null>(null);
   const [buildMessage, setBuildMessage] = useState("");
@@ -91,9 +103,10 @@ export function usePromptWorkflow(): UsePromptWorkflowResult {
       const cleaned = prompt.trim();
       if (!cleaned) { setState("error"); return; }
 
-      // Capture style/tier at submission time so results are locked to them
+      // Capture style/tier/plot at submission time so results are locked to them
       const lockedStyle = selectedStyle;
       const lockedTier  = selectedTier;
+      const lockedPlot  = plotConstraint;
 
       abortRef.current = false;
       setCurrentPrompt(cleaned);
@@ -111,7 +124,7 @@ export function usePromptWorkflow(): UsePromptWorkflowResult {
           jobs.push(
             (async () => {
               setBuildMessage("Generating floor plan layout...");
-              const jobId = await startJob(cleaned, "llm");
+              const jobId = await startJob(cleaned, "llm", lockedPlot);
               const result = await pollUntilDone(jobId, lockedStyle, lockedTier);
               if (!abortRef.current) setLlmResult({ ...result, mode: "llm" });
             })(),
@@ -121,7 +134,7 @@ export function usePromptWorkflow(): UsePromptWorkflowResult {
         if (runGnn) {
           jobs.push(
             (async () => {
-              const jobId = await startJob(cleaned, "gnn");
+              const jobId = await startJob(cleaned, "gnn", lockedPlot);
               const result = await pollUntilDone(jobId, lockedStyle, lockedTier);
               if (!abortRef.current) setGnnResult({ ...result, mode: "gnn" });
             })(),
@@ -141,7 +154,7 @@ export function usePromptWorkflow(): UsePromptWorkflowResult {
         }
       }
     },
-    [mode, selectedStyle, selectedTier],
+    [mode, selectedStyle, selectedTier, plotConstraint],
   );
 
   const reset = useCallback(() => {
@@ -157,6 +170,7 @@ export function usePromptWorkflow(): UsePromptWorkflowResult {
     state, currentPrompt, mode, setMode,
     selectedStyle, setSelectedStyle,
     selectedTier, setSelectedTier,
+    plotConstraint, setPlotConstraint,
     llmResult, gnnResult, buildMessage,
     submitPrompt, reset,
   };

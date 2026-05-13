@@ -50,94 +50,130 @@ _DEFAULTS = {
 }
 
 # ── System prompt ──────────────────────────────────────────────────────────────
-_SYSTEM_PROMPT = """You are an expert residential architect. Given a description of a house or apartment, output a JSON floor plan layout with realistic room positions and sizes.
+_SYSTEM_PROMPT = """You are an expert residential architect generating precise 2D floor plan layouts as JSON.
 
-STRICT RULES:
-1. All x, y, width, height values are in METRES. x increases rightward, y increases upward.
-2. Rooms must NOT overlap — verify every pair shares at most an edge, never an area.
-3. Adjacent rooms MUST share a wall edge (right edge of A == left edge of B, etc.) — no floating rooms.
-4. Start the layout at x=0, y=0.
-5. Every bedroom and bathroom must be reachable from a hallway or corridor — never isolated.
-6. Keep the overall footprint compact.
+═══ ABSOLUTE CONSTRAINTS (violating any of these makes the output invalid) ═══
+1. Units: all x, y, width, height in METRES. x increases right, y increases up.
+2. No overlaps: for every pair of rooms, their rectangles must not share interior area.
+   Verify: if rooms A and B overlap, they must satisfy at least one of:
+     A.x+A.width ≤ B.x  OR  B.x+B.width ≤ A.x  OR  A.y+A.height ≤ B.y  OR  B.y+B.height ≤ A.y
+3. No gaps: every room must touch at least one other room with a shared edge (not diagonal).
+   A shared edge means one room's edge coordinate exactly equals another's:
+     e.g. room A right edge (A.x + A.width) == room B left edge (B.x)
+4. Anchor: the first room in the array starts at x=0, y=0.
+5. Connectivity: the entire layout forms one connected block — no isolated rooms.
+6. Hallways must span the FULL width of the plan so all doors off the hallway are reachable.
 
-LAYOUT STRATEGY BY BEDROOM COUNT:
-  1–2 bedrooms : Place living and kitchen at y=0. Add a hallway at mid-height. Put bedrooms SIDE BY SIDE along the hallway (NOT stacked in a column).
-  3–4 bedrooms : Use a long central hallway running the full width. Bathrooms cluster next to the hallway; bedrooms spread horizontally on both sides. Avoid tall narrow columns of bedrooms.
-  5+ bedrooms  : Use two parallel hallways or an L/T shaped corridor to keep the footprint wide and short.
+═══ ARCHITECTURAL RULES ═══
+Zone separation (y-axis, low to high):
+  • Ground zone (y=0): public rooms — living, kitchen, dining, garage/parking, veranda
+  • Middle zone: hallway/corridor running FULL plan width, height 1.2–1.8 m
+  • Upper zone: private rooms — all bedrooms, all bathrooms, storage
+  Bathrooms always adjoin a bedroom or hallway, never isolated.
 
-REALISTIC ROOM SIZES (width × depth):
-  living room : 4.5–6.0 × 4.0–5.0 m
-  kitchen     : 2.5–4.0 × 2.5–4.5 m
-  dining      : 3.0–4.0 × 2.5–3.5 m
-  bedroom     : 3.0–5.5 × 3.0–4.0 m  (master up to 5.5 × 4.0)
-  bathroom    : 1.8–2.5 × 2.0–2.8 m
-  hallway     : full plan width × 1.2–1.8 m  (runs the whole width as a corridor)
-  balcony     : 1.5–3.0 × 1.0–2.0 m
-  garden      : 3.0–6.0 × 3.0–5.0 m
-  parking     : 2.5–3.5 × 4.5–6.0 m
-  storage     : 1.2–2.5 × 1.2–2.5 m
-  stair       : 2.0–2.5 × 2.5–3.5 m
-  veranda     : 2.0–4.0 × 1.5–2.5 m
+Room sizing (width × depth in metres):
+  living    : 4.5–6.5 × 4.0–5.5   kitchen  : 2.8–4.0 × 2.8–4.5
+  dining    : 3.0–4.5 × 2.5–3.5   bedroom  : 3.2–5.5 × 3.2–4.5  (master ≥ 4.0×4.0)
+  bathroom  : 1.8–2.8 × 2.0–3.0   hallway  : full-width × 1.2–1.8
+  balcony   : 1.5–3.0 × 1.0–2.0   parking  : 2.8–3.5 × 5.0–6.5
+  storage   : 1.2–2.5 × 1.2–2.5   stair    : 2.0–2.5 × 2.5–3.5
+  veranda   : 2.5–4.5 × 1.5–2.5   garden   : 3.5–7.0 × 3.5–6.0
 
-VALID room type strings: bedroom, bathroom, living, kitchen, dining, hallway, balcony, garden, parking, storage, stair, veranda
+Layout patterns by bedroom count:
+  1–2 bed: public zone at y=0 (living + kitchen side-by-side), hallway above, bedrooms + bath above hallway in a row.
+  3–4 bed: wide public zone, full-width hallway, then TWO ROWS of bedrooms side-by-side (not a single tall column). 2 bathrooms flanking the hallway entry.
+  5+ bed : two parallel hallways forming a spine, or L/U shaped corridors. Keep width >> depth.
 
-OUTPUT: Return ONLY the JSON object below. No markdown fences, no explanation.
-{"rooms":[{"id":"TYPE_INDEX","type":"TYPE","x":X,"y":Y,"width":W,"height":H},...], "metadata":{"unit_type":"house","total_area":AREA}}"""
+Style hints per prompt:
+  "haveli" / "courtyard" → wider plan, add veranda at front (y=0), thicker walls implied by larger rooms
+  "apartment" → more compact, add balcony off living or bedroom
+  "bungalow" → single storey feel, wider rather than taller plan
+  "villa" → generous room sizes, add garden + parking
+
+VALID type strings (use exactly): bedroom, bathroom, living, kitchen, dining, hallway, balcony, garden, parking, storage, stair, veranda
+
+═══ SELF-CHECK BEFORE OUTPUTTING ═══
+For each room R, confirm:
+  a) At least one neighbour N where R shares an edge: R.x+R.width==N.x OR N.x+N.width==R.x OR R.y+R.height==N.y OR N.y+N.height==R.y
+  b) No pair (R, N) where rectangles overlap in both axes simultaneously.
+If any room fails (a), move it flush against its nearest neighbour before outputting.
+
+OUTPUT FORMAT — return only this JSON object, no markdown, no explanation:
+{"rooms":[{"id":"type_index","type":"TYPE","x":X.XX,"y":Y.YY,"width":W.WW,"height":H.HH},...],"metadata":{"unit_type":"house","total_area":AREA}}"""
 
 # ── Few-shot examples ──────────────────────────────────────────────────────────
-# Three distinct layout patterns verified zero overlaps, shared walls, realistic sizes.
+# Four verified layouts: zero overlaps, all shared-wall edges, realistic Pakistani house sizes.
 _EXAMPLES = [
     {
-        # 2-bed house: bedrooms SIDE BY SIDE along a horizontal hallway
+        # 2-bed compact house
         "user": "A 2 bedroom house with 1 bathroom, living room, and kitchen",
         "assistant": json.dumps({
             "rooms": [
-                {"id": "living_0",   "type": "living",   "x": 0.0, "y": 0.0, "width": 5.0, "height": 4.0},
-                {"id": "kitchen_1",  "type": "kitchen",  "x": 5.0, "y": 0.0, "width": 3.0, "height": 4.0},
-                {"id": "hallway_2",  "type": "hallway",  "x": 0.0, "y": 4.0, "width": 8.0, "height": 1.5},
-                {"id": "bathroom_3", "type": "bathroom", "x": 0.0, "y": 5.5, "width": 2.0, "height": 2.5},
-                {"id": "bedroom_4",  "type": "bedroom",  "x": 2.0, "y": 5.5, "width": 3.0, "height": 3.5},
-                {"id": "bedroom_5",  "type": "bedroom",  "x": 5.0, "y": 5.5, "width": 3.0, "height": 3.5},
+                {"id": "living_0",   "type": "living",   "x": 0.0, "y": 0.0, "width": 5.0, "height": 4.5},
+                {"id": "kitchen_1",  "type": "kitchen",  "x": 5.0, "y": 0.0, "width": 3.2, "height": 4.5},
+                {"id": "hallway_2",  "type": "hallway",  "x": 0.0, "y": 4.5, "width": 8.2, "height": 1.4},
+                {"id": "bathroom_3", "type": "bathroom", "x": 0.0, "y": 5.9, "width": 2.2, "height": 2.8},
+                {"id": "bedroom_4",  "type": "bedroom",  "x": 2.2, "y": 5.9, "width": 3.0, "height": 3.6},
+                {"id": "bedroom_5",  "type": "bedroom",  "x": 5.2, "y": 5.9, "width": 3.0, "height": 3.6},
             ],
-            "metadata": {"unit_type": "house", "total_area": 71}
+            "metadata": {"unit_type": "house", "total_area": 76}
         }, separators=(',', ':'))
     },
     {
-        # 4-bed house: full-width corridor, bedrooms spread horizontally on both sides
+        # 4-bed house, two-row bedroom zone
         "user": "A 4 bedroom house with 2 bathrooms, living room, kitchen, and dining room",
         "assistant": json.dumps({
             "rooms": [
-                {"id": "living_0",   "type": "living",   "x": 0.0, "y": 0.0, "width": 6.0, "height": 4.5},
-                {"id": "kitchen_1",  "type": "kitchen",  "x": 6.0, "y": 0.0, "width": 3.5, "height": 3.0},
-                {"id": "dining_2",   "type": "dining",   "x": 6.0, "y": 3.0, "width": 3.5, "height": 1.5},
-                {"id": "hallway_3",  "type": "hallway",  "x": 0.0, "y": 4.5, "width": 9.5, "height": 1.5},
-                {"id": "bathroom_4", "type": "bathroom", "x": 0.0, "y": 6.0, "width": 2.0, "height": 2.5},
-                {"id": "bathroom_5", "type": "bathroom", "x": 2.0, "y": 6.0, "width": 2.0, "height": 2.5},
-                {"id": "bedroom_6",  "type": "bedroom",  "x": 4.0, "y": 6.0, "width": 5.5, "height": 3.5},
-                {"id": "bedroom_7",  "type": "bedroom",  "x": 0.0, "y": 8.5, "width": 4.0, "height": 3.5},
-                {"id": "bedroom_8",  "type": "bedroom",  "x": 4.0, "y": 9.5, "width": 3.0, "height": 3.0},
-                {"id": "bedroom_9",  "type": "bedroom",  "x": 7.0, "y": 9.5, "width": 2.5, "height": 3.0},
+                {"id": "living_0",   "type": "living",   "x": 0.0, "y": 0.0, "width": 5.5, "height": 4.5},
+                {"id": "kitchen_1",  "type": "kitchen",  "x": 5.5, "y": 0.0, "width": 3.5, "height": 3.0},
+                {"id": "dining_2",   "type": "dining",   "x": 5.5, "y": 3.0, "width": 3.5, "height": 1.5},
+                {"id": "hallway_3",  "type": "hallway",  "x": 0.0, "y": 4.5, "width": 9.0, "height": 1.5},
+                {"id": "bathroom_4", "type": "bathroom", "x": 0.0, "y": 6.0, "width": 2.2, "height": 2.8},
+                {"id": "bathroom_5", "type": "bathroom", "x": 2.2, "y": 6.0, "width": 2.2, "height": 2.8},
+                {"id": "bedroom_6",  "type": "bedroom",  "x": 4.4, "y": 6.0, "width": 4.6, "height": 3.8},
+                {"id": "bedroom_7",  "type": "bedroom",  "x": 0.0, "y": 8.8, "width": 3.2, "height": 3.8},
+                {"id": "bedroom_8",  "type": "bedroom",  "x": 3.2, "y": 8.8, "width": 3.0, "height": 3.8},
+                {"id": "bedroom_9",  "type": "bedroom",  "x": 6.2, "y": 8.8, "width": 2.8, "height": 3.8},
             ],
-            "metadata": {"unit_type": "house", "total_area": 117}
+            "metadata": {"unit_type": "house", "total_area": 120}
         }, separators=(',', ':'))
     },
     {
-        # 3-bed apartment: corridor runs full width; bedrooms in two tiers, not a single column
+        # 3-bed apartment with balcony
         "user": "A 3 bedroom apartment with 2 bathrooms, open plan living and kitchen, dining, and a balcony",
         "assistant": json.dumps({
             "rooms": [
                 {"id": "living_0",   "type": "living",   "x": 0.0, "y": 0.0, "width": 5.5, "height": 4.5},
                 {"id": "kitchen_1",  "type": "kitchen",  "x": 5.5, "y": 0.0, "width": 3.0, "height": 3.0},
                 {"id": "dining_2",   "type": "dining",   "x": 5.5, "y": 3.0, "width": 3.0, "height": 1.5},
-                {"id": "balcony_3",  "type": "balcony",  "x": 8.5, "y": 0.0, "width": 1.5, "height": 4.5},
-                {"id": "hallway_4",  "type": "hallway",  "x": 0.0, "y": 4.5, "width": 8.5, "height": 1.5},
-                {"id": "bathroom_5", "type": "bathroom", "x": 0.0, "y": 6.0, "width": 2.0, "height": 2.5},
-                {"id": "bathroom_6", "type": "bathroom", "x": 2.0, "y": 6.0, "width": 2.0, "height": 2.5},
-                {"id": "bedroom_7",  "type": "bedroom",  "x": 4.0, "y": 6.0, "width": 4.5, "height": 3.5},
-                {"id": "bedroom_8",  "type": "bedroom",  "x": 0.0, "y": 8.5, "width": 4.0, "height": 3.5},
-                {"id": "bedroom_9",  "type": "bedroom",  "x": 4.0, "y": 9.5, "width": 4.5, "height": 3.5},
+                {"id": "balcony_3",  "type": "balcony",  "x": 8.5, "y": 0.0, "width": 1.8, "height": 4.5},
+                {"id": "hallway_4",  "type": "hallway",  "x": 0.0, "y": 4.5, "width": 8.5, "height": 1.4},
+                {"id": "bathroom_5", "type": "bathroom", "x": 0.0, "y": 5.9, "width": 2.2, "height": 2.6},
+                {"id": "bathroom_6", "type": "bathroom", "x": 2.2, "y": 5.9, "width": 2.2, "height": 2.6},
+                {"id": "bedroom_7",  "type": "bedroom",  "x": 4.4, "y": 5.9, "width": 4.1, "height": 4.0},
+                {"id": "bedroom_8",  "type": "bedroom",  "x": 0.0, "y": 8.5, "width": 4.2, "height": 3.8},
+                {"id": "bedroom_9",  "type": "bedroom",  "x": 4.2, "y": 9.9, "width": 4.3, "height": 2.4},
             ],
-            "metadata": {"unit_type": "apartment", "total_area": 120}
+            "metadata": {"unit_type": "apartment", "total_area": 116}
+        }, separators=(',', ':'))
+    },
+    {
+        # 5-marla Pakistani haveli-style house with parking and veranda
+        "user": "A traditional Pakistani 5 marla house with 3 bedrooms, 2 bathrooms, lounge, kitchen, and a veranda at the front with parking",
+        "assistant": json.dumps({
+            "rooms": [
+                {"id": "parking_0",  "type": "parking",  "x": 0.0, "y": 0.0, "width": 2.8, "height": 5.5},
+                {"id": "veranda_1",  "type": "veranda",  "x": 2.8, "y": 0.0, "width": 4.7, "height": 2.0},
+                {"id": "living_2",   "type": "living",   "x": 2.8, "y": 2.0, "width": 4.7, "height": 3.5},
+                {"id": "kitchen_3",  "type": "kitchen",  "x": 7.5, "y": 0.0, "width": 3.0, "height": 5.5},
+                {"id": "hallway_4",  "type": "hallway",  "x": 0.0, "y": 5.5, "width":10.5, "height": 1.4},
+                {"id": "bathroom_5", "type": "bathroom", "x": 0.0, "y": 6.9, "width": 2.4, "height": 2.6},
+                {"id": "bathroom_6", "type": "bathroom", "x": 2.4, "y": 6.9, "width": 2.4, "height": 2.6},
+                {"id": "bedroom_7",  "type": "bedroom",  "x": 4.8, "y": 6.9, "width": 5.7, "height": 4.0},
+                {"id": "bedroom_8",  "type": "bedroom",  "x": 0.0, "y": 9.5, "width": 4.8, "height": 4.0},
+                {"id": "bedroom_9",  "type": "bedroom",  "x": 4.8, "y":10.9, "width": 5.7, "height": 2.6},
+            ],
+            "metadata": {"unit_type": "house", "total_area": 140}
         }, separators=(',', ':'))
     },
 ]
@@ -147,35 +183,40 @@ _EXAMPLES = [
 # One is picked at random per generation call and appended to the user prompt.
 # Each variant forces a structurally different spatial arrangement.
 _LAYOUT_VARIANTS = [
-    # 0 – wide shallow (default feel, bedrooms across full back width)
-    "Layout style: wide shallow plan. Public rooms form a wide front band. "
-    "Bedrooms span the full width at the back. Overall width >> depth.",
+    # 0 – wide shallow (standard Pakistani residential, bedrooms across full back)
+    "Spatial arrangement: WIDE SHALLOW plan. Ground floor: living + kitchen + dining "
+    "placed side-by-side in a wide front band (width >> depth). Full-width hallway "
+    "above. All bedrooms span the full width at the back in a single row. "
+    "Total width should be 10–14 m, depth 10–16 m.",
 
-    # 1 – deep linear spine
-    "Layout style: deep linear plan. A narrow hallway runs the entire depth as a spine. "
-    "Rooms open off to the left AND right of the spine. Living nearest entry, "
-    "bedrooms at the far end. Overall depth >> width.",
+    # 1 – standard with central corridor spine
+    "Spatial arrangement: CENTRAL CORRIDOR. A wide hallway or passage runs down the "
+    "middle of the plan. Living and kitchen on one side of the corridor (or below it). "
+    "Bedrooms and bathrooms on the other side. Compact and efficient.",
 
-    # 2 – L-shaped
-    "Layout style: L-shaped footprint. Living zone fills one wing. "
-    "Bedrooms fill the other wing at roughly 90 degrees. "
-    "Hallway sits at the inside corner joining both wings.",
+    # 2 – front veranda / street-facing
+    "Spatial arrangement: FRONT VERANDA. Add a veranda or covered entrance at y=0 "
+    "spanning at least 40% of the total width. Living room directly behind veranda. "
+    "Kitchen to the side. Bedrooms at the back above the hallway. "
+    "Typical of older Lahore / Karachi residential plots.",
 
-    # 3 – front kitchen, rear living
-    "Layout style: inverted entry. Kitchen and dining face the street (low y). "
-    "Living room is in the quieter rear-middle zone. "
-    "Bedrooms wrap around the living room on two or three sides.",
+    # 3 – double-storey feel (private zone stacked)
+    "Spatial arrangement: STACKED ZONES. Ground zone is entirely public: living, "
+    "kitchen, dining, and optionally parking all share y=0. "
+    "Private zone (bedrooms, bathrooms) is a separate deep band above the hallway. "
+    "Bedrooms arranged in TWO side-by-side rows (not a single column).",
 
-    # 4 – open social cluster + private cluster
-    "Layout style: two-cluster plan. All social rooms (living, kitchen, dining) "
-    "form one large open cluster touching each other. "
-    "All bedrooms and bathrooms form a separate tight cluster. "
-    "A single short hallway bridges the two clusters.",
+    # 4 – open-plan social core
+    "Spatial arrangement: OPEN SOCIAL CORE. Living, kitchen, and dining are merged "
+    "into one large open-plan zone at y=0 with no internal walls between them "
+    "(represent as three touching rooms with shared edges). "
+    "Bedrooms cluster privately at the top behind the hallway.",
 
-    # 5 – courtyard-adjacent / U-shape
-    "Layout style: U-shaped plan. Rooms are arranged on three sides of a central "
-    "implied outdoor space. Living on one arm, bedrooms on the opposite arm, "
-    "kitchen/dining on the connecting base.",
+    # 5 – courtyard / haveli inspired
+    "Spatial arrangement: HAVELI-INSPIRED. Rooms are arranged around three sides of "
+    "a central implied courtyard (do NOT include the courtyard as a room). "
+    "Veranda or living on the south-facing side (y=0). Bedrooms on the east and west "
+    "arms. Kitchen at the back. Parking to one side.",
 ]
 
 
@@ -280,12 +321,18 @@ def _validate_room_graph(data: dict) -> dict:
     }
 
 
+# ── Custom exceptions ──────────────────────────────────────────────────────────
+
+class _QuotaExhausted(Exception):
+    """Raised when a provider returns HTTP 429 (quota / rate-limit exhausted)."""
+
+
 # ── Provider implementations ───────────────────────────────────────────────────
 
 def _call_openai(prompt: str, api_key: str, model: str,
                  base_url: Optional[str] = None) -> str:
     try:
-        from openai import OpenAI
+        from openai import OpenAI, RateLimitError
     except ImportError:
         raise ImportError(
             "openai package not installed.\n"
@@ -302,12 +349,16 @@ def _call_openai(prompt: str, api_key: str, model: str,
         messages.append({"role": "assistant", "content": ex["assistant"]})
     messages.append({"role": "user", "content": prompt})
 
-    resp = client.chat.completions.create(
-        model=model,
-        messages=messages,
-        temperature=0.7,
-        max_tokens=2000,
-    )
+    try:
+        resp = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=0.4,
+            max_tokens=8192,
+        )
+    except RateLimitError as exc:
+        raise _QuotaExhausted(str(exc)) from exc
+
     return resp.choices[0].message.content
 
 
@@ -357,6 +408,12 @@ async def generate_room_layout(prompt: str) -> Dict[str, Any]:
     model    = os.getenv("LLM_MODEL",    "")
     base_url = os.getenv("LLM_BASE_URL", "")
 
+    # Groq fallback — used automatically when the primary provider hits a quota error
+    _groq_key      = os.getenv("GROQ_API_KEY",   "")
+    _groq_model    = os.getenv("GROQ_MODEL",      "llama-3.3-70b-versatile")
+    _groq_base_url = os.getenv("GROQ_BASE_URL",   "https://api.groq.com/openai/v1")
+    _has_groq      = bool(_groq_key)
+
     # Auto-detect provider if not set
     if not provider:
         if os.getenv("ANTHROPIC_API_KEY"):
@@ -395,32 +452,67 @@ async def generate_room_layout(prompt: str) -> Dict[str, Any]:
     variant = _pick_layout_variant()
     augmented_prompt = f"{prompt}\n\n{variant}"
 
-    print(f"[LLM] Generating layout via {provider} / {model}  [variant: {variant[:60]}...]")
-
-    # Run the blocking API call in a thread so it doesn't block the event loop
     loop = asyncio.get_event_loop()
 
-    if provider == "anthropic":
-        raw = await loop.run_in_executor(
-            None, lambda: _call_anthropic(augmented_prompt, api_key, model)
-        )
-    elif provider in ("openai", "openai_compatible"):
-        url = base_url or None
-        raw = await loop.run_in_executor(
-            None, lambda: _call_openai(augmented_prompt, api_key, model, url)
-        )
-    else:
-        raise RuntimeError(f"Unknown LLM_PROVIDER: '{provider}'. Use openai, anthropic, or openai_compatible.")
+    last_error: Exception | None = None
+    for attempt in range(1, 4):          # up to 3 attempts
+        variant           = _pick_layout_variant()
+        augmented_prompt  = f"{prompt}\n\n{variant}"
+        print(f"[LLM] Attempt {attempt}/3 via {provider}/{model}  [{variant[:55]}...]")
 
-    print(f"[LLM] Response received ({len(raw)} chars)")
+        try:
+            if provider == "anthropic":
+                raw = await loop.run_in_executor(
+                    None, lambda: _call_anthropic(augmented_prompt, api_key, model)
+                )
+            elif provider in ("openai", "openai_compatible"):
+                url = base_url or None
+                raw = await loop.run_in_executor(
+                    None, lambda: _call_openai(augmented_prompt, api_key, model, url)
+                )
+            else:
+                raise RuntimeError(
+                    f"Unknown LLM_PROVIDER: '{provider}'. "
+                    "Use openai, anthropic, or openai_compatible."
+                )
 
-    data       = _extract_json(raw)
-    room_graph = _validate_room_graph(data)
+            print(f"[LLM] Response received ({len(raw)} chars)")
+            data       = _extract_json(raw)
+            room_graph = _validate_room_graph(data)
+            print(f"[LLM] Generated {len(room_graph['rooms'])} rooms, "
+                  f"total_area={room_graph['metadata']['total_area']}m²")
+            return room_graph
 
-    print(f"[LLM] Generated {len(room_graph['rooms'])} rooms, "
-          f"total_area={room_graph['metadata']['total_area']}m²")
+        except _QuotaExhausted as exc:
+            # Primary provider quota exhausted — try Groq fallback immediately (no retry)
+            print(f"[LLM] Primary provider quota exhausted: {exc}")
+            if not _has_groq:
+                raise RuntimeError(
+                    "Primary provider quota exhausted and no Groq fallback configured.\n"
+                    "Add GROQ_API_KEY to your .env file."
+                ) from exc
+            print(f"[LLM] Switching to Groq fallback ({_groq_model})...")
+            try:
+                raw = await loop.run_in_executor(
+                    None,
+                    lambda: _call_openai(augmented_prompt, _groq_key, _groq_model, _groq_base_url),
+                )
+                print(f"[LLM] Groq response received ({len(raw)} chars)")
+                data       = _extract_json(raw)
+                room_graph = _validate_room_graph(data)
+                print(f"[LLM] Groq fallback OK — {len(room_graph['rooms'])} rooms, "
+                      f"total_area={room_graph['metadata']['total_area']}m²")
+                return room_graph
+            except Exception as groq_exc:
+                raise RuntimeError(f"Groq fallback failed: {groq_exc}") from groq_exc
 
-    return room_graph
+        except (ValueError, RuntimeError) as exc:
+            last_error = exc
+            print(f"[LLM] Attempt {attempt} failed: {exc} — retrying...")
+
+    raise RuntimeError(
+        f"LLM failed after 3 attempts. Last error: {last_error}"
+    )
 
 
 def spec_from_room_graph(room_graph: dict) -> dict:

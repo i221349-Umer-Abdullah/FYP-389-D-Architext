@@ -31,7 +31,8 @@ from backend.api.routes.generate       import router as generate_router
 from backend.api.routes.status         import router as status_router
 from backend.api.routes.download       import router as download_router
 from backend.api.routes.preview        import router as preview_router
-from backend.api.routes.ifc_from_rooms import router as ifc_from_rooms_router
+from backend.api.routes.ifc_from_rooms       import router as ifc_from_rooms_router
+from backend.api.routes.preview_from_rooms   import router as preview_from_rooms_router
 from backend.models.schemas      import HealthResponse
 from backend.core.nlp_adapter    import get_nlp_adapter
 from backend.core.mock_gnn       import MockGNNAdapter
@@ -58,7 +59,8 @@ app.include_router(generate_router,       prefix="/api", tags=["Generation"])
 app.include_router(status_router,         prefix="/api", tags=["Status"])
 app.include_router(download_router,       prefix="/api", tags=["Download"])
 app.include_router(preview_router,        prefix="/api", tags=["Preview"])
-app.include_router(ifc_from_rooms_router, prefix="/api", tags=["IFC"])
+app.include_router(ifc_from_rooms_router,     prefix="/api", tags=["IFC"])
+app.include_router(preview_from_rooms_router, prefix="/api", tags=["Preview"])
 
 
 @app.get("/api/health", response_model=HealthResponse, tags=["Health"])

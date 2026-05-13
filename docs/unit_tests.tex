@@ -1,0 +1,461 @@
+% ============================================================
+%  ArchiText — Unit Testing Section
+%  Paste this into your FYP2 report chapter on Testing.
+%  Required packages (add to your preamble if not present):
+%    \usepackage{longtable}
+%    \usepackage{booktabs}
+%    \usepackage{array}
+%    \usepackage{pdflscape}
+%    \usepackage{xcolor}
+%    \usepackage{colortbl}
+% ============================================================
+
+\definecolor{passgreen}{RGB}{198,239,206}
+\definecolor{failred}{RGB}{255,199,206}
+\definecolor{tableheader}{RGB}{68,114,196}
+
+% ----------------------------------------------------------
+\section{Unit Testing}
+% ----------------------------------------------------------
+
+Unit testing was conducted on the six core backend modules of ArchiText: the NLP Adapter, Spec Converter, Plot Constraint Fitter, Request/Response Schemas, Job Manager, and Plot Unit Converter. A total of 56 test cases were designed and executed programmatically against the live codebase. Each test was constructed with a clearly defined precondition, a specific set of inputs, and an unambiguous expected outcome so that results could be verified objectively. Fifty-five of the 56 test cases passed on the first run. The single failing test, TC-PF-08, exposed a genuine algorithmic limitation in the Plot Constraint Fitter that was subsequently diagnosed and corrected; all 56 tests pass in the final codebase.
+
+\medskip
+\noindent\textbf{Note on TC-PF-08 (Plot Fitter — Overlap Resolution):}
+Test case TC-PF-08 was designed to verify that the push-apart algorithm resolves overlapping rooms after plot fitting. The test submitted three identically-sized rooms all positioned at the same coordinate \((0, 0)\) on a 15\,m\,$\times$\,12\,m plot. The test revealed that the uniform scaling step in Step 2 of the fitting algorithm computed the layout's bounding box as a single room's footprint (since all three rooms were coincident), and scaled that single footprint to fill the available area. Each room consequently expanded to 11.3\,m\,$\times$\,11.3\,m — the full height of the available plot — leaving the push-apart algorithm with no space to physically separate them. Two fixes were implemented in \texttt{backend/core/plot\_fitter.py}: (1) \textbf{Step 3.5 — Grid-based scale-down}: after enforcing minimum sizes, if any room exceeds its fair share of a $\lceil\sqrt{N}\rceil \times \lceil\sqrt{N}\rceil$ grid, it is scaled down so all $N$ rooms can physically pack into the plot; (2) \textbf{Step 3.6 — Position degeneracy breaker}: rooms sharing the exact same $(x, y)$ coordinate are pre-placed in a grid arrangement before the push-apart runs, giving the algorithm distinct starting positions to work from. After applying these fixes, TC-PF-08 passed, and all previously passing tests continued to pass. This fix also improves the system's robustness against mode-collapse output from the CVAE-GNN model, where generated rooms can converge to near-identical positions.
+
+\bigskip
+
+% ----------------------------------------------------------
+\subsection{Module 1: NLP Adapter}
+\texttt{backend/core/nlp\_adapter.py} — 12 test cases, 12 passed
+% ----------------------------------------------------------
+
+\begin{landscape}
+\small
+\begin{longtable}{|p{1.4cm}|p{3.2cm}|p{3.0cm}|p{2.8cm}|p{2.8cm}|p{2.8cm}|p{2.6cm}|p{2.8cm}|p{1.0cm}|}
+\caption{Unit Test Results — NLP Adapter} \label{tab:nlp} \\
+\hline
+\rowcolor{tableheader}
+\textcolor{white}{\textbf{TC ID}} &
+\textcolor{white}{\textbf{Test Objective}} &
+\textcolor{white}{\textbf{Precondition}} &
+\textcolor{white}{\textbf{Steps}} &
+\textcolor{white}{\textbf{Test Data}} &
+\textcolor{white}{\textbf{Expected Result}} &
+\textcolor{white}{\textbf{Post-condition}} &
+\textcolor{white}{\textbf{Actual Result}} &
+\textcolor{white}{\textbf{Pass/ Fail}} \\
+\hline
+\endfirsthead
+\hline
+\rowcolor{tableheader}
+\textcolor{white}{\textbf{TC ID}} &
+\textcolor{white}{\textbf{Test Objective}} &
+\textcolor{white}{\textbf{Precondition}} &
+\textcolor{white}{\textbf{Steps}} &
+\textcolor{white}{\textbf{Test Data}} &
+\textcolor{white}{\textbf{Expected Result}} &
+\textcolor{white}{\textbf{Post-condition}} &
+\textcolor{white}{\textbf{Actual Result}} &
+\textcolor{white}{\textbf{Pass/ Fail}} \\
+\hline
+\endhead
+
+\rowcolor{passgreen}
+TC-NLP-01 & Verify bedroom and bathroom count extraction & NLPAdapter initialised (rule-based fallback active) & Call \texttt{nlp.parse()} with standard description & \texttt{"3 bedroom house with 2 bathrooms"} & \texttt{bedroom=3}, \texttt{bathroom=2} & Spec dict available for Layer 2 & \texttt{bedroom=3}, \texttt{bathroom=2} & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-NLP-02 & Verify marla area extraction and m² conversion & NLPAdapter initialised & Call \texttt{nlp.parse()} with marla area & \texttt{"5 marla house with 3 bedrooms"} & \texttt{net\_area = 126} (5\,$\times$\,25.2) & \texttt{net\_area} field set correctly & \texttt{net\_area = 126} & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-NLP-03 & Verify apartment unit type detection & NLPAdapter initialised & Call \texttt{nlp.parse()} with "apartment" keyword & \texttt{"2 bedroom apartment with 1 bathroom"} & \texttt{unit\_type = "apartment"} & Unit type stored & \texttt{unit\_type = "apartment"} & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-NLP-04 & Verify default house unit type & NLPAdapter initialised & Call \texttt{nlp.parse()} without apartment/villa keyword & \texttt{"a house with 4 bedrooms and garden"} & \texttt{unit\_type = "house"} & Unit type defaults to house & \texttt{unit\_type = "house"} & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-NLP-05 & Verify balcony keyword detection & NLPAdapter initialised & Call \texttt{nlp.parse()} with "balcony" keyword & \texttt{"3 bedroom house with balcony"} & \texttt{balcony = 1} & Balcony flag set & \texttt{balcony = 1} & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-NLP-06 & Verify garden keyword detection & NLPAdapter initialised & Call \texttt{nlp.parse()} with "garden" keyword & \texttt{"house with garden and 2 bedrooms"} & \texttt{garden = 1} & Garden flag set & \texttt{garden = 1} & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-NLP-07 & Verify parking/garage keyword detection & NLPAdapter initialised & Call \texttt{nlp.parse()} with "garage" keyword & \texttt{"4 bedroom house with garage"} & \texttt{parking = 1} & Parking flag set & \texttt{parking = 1} & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-NLP-08 & Verify square metre area extraction & NLPAdapter initialised & Call \texttt{nlp.parse()} with sqm area & \texttt{"200 sqm house with 3 bedrooms"} & \texttt{net\_area = 200} & net\_area field set & \texttt{net\_area = 200} & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-NLP-09 & Verify empty string input does not crash & NLPAdapter initialised & Call \texttt{nlp.parse("")} & \texttt{""} (empty string) & Returns default spec dict without exception & Fallback defaults returned & Returns dict with defaults; no exception & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-NLP-10 & Verify bathroom defaults to 1 when absent & NLPAdapter initialised & Call \texttt{nlp.parse()} with no bathroom mention & \texttt{"house with 3 bedrooms"} & \texttt{bathroom = 1} & Bathroom defaults correctly & \texttt{bathroom = 1} & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-NLP-11 & Verify villa type and pool detection & NLPAdapter initialised & Call \texttt{nlp.parse()} with "villa" and "pool" & \texttt{"luxury villa with 5 bedrooms and pool"} & \texttt{unit\_type="villa"}, \texttt{pool=1} & Villa type and pool flag set & \texttt{unit\_type="villa"}, \texttt{pool=1} & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-NLP-12 & Verify two-storey stair detection & NLPAdapter initialised & Call \texttt{nlp.parse()} with "two storey" & \texttt{"two storey house with 4 bedrooms"} & \texttt{stair = 1} & Stair flag set & \texttt{stair = 1} & Pass \\ \hline
+
+\end{longtable}
+\end{landscape}
+
+% ----------------------------------------------------------
+\subsection{Module 2: Spec Converter}
+\texttt{backend/core/spec\_converter.py} — 10 test cases, 10 passed
+% ----------------------------------------------------------
+
+\begin{landscape}
+\small
+\begin{longtable}{|p{1.4cm}|p{3.2cm}|p{2.8cm}|p{2.8cm}|p{2.8cm}|p{2.8cm}|p{2.6cm}|p{2.8cm}|p{1.0cm}|}
+\caption{Unit Test Results — Spec Converter} \label{tab:sc} \\
+\hline
+\rowcolor{tableheader}
+\textcolor{white}{\textbf{TC ID}} &
+\textcolor{white}{\textbf{Test Objective}} &
+\textcolor{white}{\textbf{Precondition}} &
+\textcolor{white}{\textbf{Steps}} &
+\textcolor{white}{\textbf{Test Data}} &
+\textcolor{white}{\textbf{Expected Result}} &
+\textcolor{white}{\textbf{Post-condition}} &
+\textcolor{white}{\textbf{Actual Result}} &
+\textcolor{white}{\textbf{Pass/ Fail}} \\
+\hline
+\endfirsthead
+\hline
+\rowcolor{tableheader}
+\textcolor{white}{\textbf{TC ID}} &
+\textcolor{white}{\textbf{Test Objective}} &
+\textcolor{white}{\textbf{Precondition}} &
+\textcolor{white}{\textbf{Steps}} &
+\textcolor{white}{\textbf{Test Data}} &
+\textcolor{white}{\textbf{Expected Result}} &
+\textcolor{white}{\textbf{Post-condition}} &
+\textcolor{white}{\textbf{Actual Result}} &
+\textcolor{white}{\textbf{Pass/ Fail}} \\
+\hline
+\endhead
+
+\rowcolor{passgreen}
+TC-SC-01 & Verify condition vector is 18-dimensional & numpy and spec\_converter imported & Call \texttt{spec\_to\_condition\_vector()} & \texttt{\{bedroom:3, bathroom:2, kitchen:1, living:1, unit\_type:"house"\}} & \texttt{len(vector) = 18} & 18-dim float32 array returned & \texttt{len = 18} & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-SC-02 & Verify bedroom count normalisation (3/5\,=\,0.6) & spec\_converter imported & Call with \texttt{bedroom=3} & \texttt{\{bedroom:3, unit\_type:"house"\}} & \texttt{vector[0] $\approx$ 0.6} & Bedroom slot normalised & \texttt{vector[0] = 0.600} & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-SC-03 & Verify count capped at 1.0 for overflow & spec\_converter imported & Call with \texttt{bedroom=10} ($>$ MAX=5) & \texttt{\{bedroom:10, unit\_type:"house"\}} & \texttt{vector[0] = 1.0} & Value clamped to maximum & \texttt{vector[0] = 1.0} & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-SC-04 & Verify \texttt{is\_apartment} flag set correctly & spec\_converter imported & Call with \texttt{unit\_type="apartment"} & \texttt{\{bedroom:2, unit\_type:"apartment"\}} & \texttt{vector[10]=1.0}, \texttt{vector[11]=0.0} & Apartment flag active & \texttt{vector[10]=1.0}, \texttt{vector[11]=0.0} & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-SC-05 & Verify \texttt{is\_house} flag set correctly & spec\_converter imported & Call with \texttt{unit\_type="house"} & \texttt{\{bedroom:3, unit\_type:"house"\}} & \texttt{vector[10]=0.0}, \texttt{vector[11]=1.0} & House flag active & \texttt{vector[10]=0.0}, \texttt{vector[11]=1.0} & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-SC-06 & Verify alias "living" resolves to living\_room slot & spec\_converter imported & Call with old-style "living" key & \texttt{\{living:1, unit\_type:"house"\}} & \texttt{vector[3] $\approx$ 0.2} & Alias mapped to index 3 & \texttt{vector[3] = 0.200} & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-SC-07 & Verify alias "veranda" resolves to balcony slot & spec\_converter imported & Call with "veranda" key & \texttt{\{veranda:1, unit\_type:"house"\}} & \texttt{vector[5] $\approx$ 0.2} & Alias mapped to index 5 & \texttt{vector[5] = 0.200} & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-SC-08 & Verify \texttt{normalise\_spec} adds living\_room default & spec\_converter imported & Call \texttt{normalise\_spec()} with no living room & \texttt{\{bedroom:2, bathroom:1\}} & \texttt{living\_room $\geq$ 1} & Default living room added & \texttt{living\_room = 1} & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-SC-09 & Verify \texttt{normalise\_spec} adds kitchen default & spec\_converter imported & Call \texttt{normalise\_spec()} with no kitchen & \texttt{\{bedroom:2, bathroom:1\}} & \texttt{kitchen $\geq$ 1} & Default kitchen added & \texttt{kitchen = 1} & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-SC-10 & Verify padding dimensions [12:18] are zero & spec\_converter imported & Call and inspect tail of vector & \texttt{\{bedroom:3, bathroom:2, unit\_type:"house"\}} & \texttt{vector[12:18]} all = 0.0 & Padding slots remain zero & All 6 padding dims = 0.0 & Pass \\ \hline
+
+\end{longtable}
+\end{landscape}
+
+% ----------------------------------------------------------
+\subsection{Module 3: Plot Constraint Fitter}
+\texttt{backend/core/plot\_fitter.py} — 10 test cases, 10 passed (1 initially failed; fixed)
+% ----------------------------------------------------------
+
+\begin{landscape}
+\small
+\begin{longtable}{|p{1.4cm}|p{3.2cm}|p{2.8cm}|p{2.8cm}|p{2.8cm}|p{2.8cm}|p{2.6cm}|p{2.8cm}|p{1.0cm}|}
+\caption{Unit Test Results — Plot Constraint Fitter} \label{tab:pf} \\
+\hline
+\rowcolor{tableheader}
+\textcolor{white}{\textbf{TC ID}} &
+\textcolor{white}{\textbf{Test Objective}} &
+\textcolor{white}{\textbf{Precondition}} &
+\textcolor{white}{\textbf{Steps}} &
+\textcolor{white}{\textbf{Test Data}} &
+\textcolor{white}{\textbf{Expected Result}} &
+\textcolor{white}{\textbf{Post-condition}} &
+\textcolor{white}{\textbf{Actual Result}} &
+\textcolor{white}{\textbf{Pass/ Fail}} \\
+\hline
+\endfirsthead
+\hline
+\rowcolor{tableheader}
+\textcolor{white}{\textbf{TC ID}} &
+\textcolor{white}{\textbf{Test Objective}} &
+\textcolor{white}{\textbf{Precondition}} &
+\textcolor{white}{\textbf{Steps}} &
+\textcolor{white}{\textbf{Test Data}} &
+\textcolor{white}{\textbf{Expected Result}} &
+\textcolor{white}{\textbf{Post-condition}} &
+\textcolor{white}{\textbf{Actual Result}} &
+\textcolor{white}{\textbf{Pass/ Fail}} \\
+\hline
+\endhead
+
+\rowcolor{passgreen}
+TC-PF-01 & Verify empty room list returns empty & plot\_fitter imported & Call \texttt{fit\_rooms\_to\_plot([], 10, 8)} & \texttt{rooms=[]}, \texttt{plot\_w=10}, \texttt{plot\_h=8} & Returns \texttt{[]} without error & No exception; empty list returned & \texttt{[]} returned & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-PF-02 & Verify all rooms fit within plot bounds after fitting & plot\_fitter imported & Call with oversized rooms; check all \texttt{x+w $\leq$ plot\_w} & 3 rooms totalling 90\,$\times$\,30\,m on a 10\,$\times$\,8\,m plot & All rooms within 10\,$\times$\,8\,m boundary & Layout confined to plot & All rooms within bounds & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-PF-03 & Verify input rooms are not mutated (deep copy) & plot\_fitter imported & Call fitter; compare input before and after & \texttt{\{x:5, y:5, width:3, height:3\}} & Input dict unchanged after call & Original list unmodified & Input dict unchanged & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-PF-04 & Verify bedroom minimum size (2.5\,$\times$\,2.5\,m) enforced & plot\_fitter imported & Call with 0.1\,$\times$\,0.1 bedroom on large plot & \texttt{\{type:"bedroom", width:0.1, height:0.1\}}, plot 20\,$\times$\,20\,m & \texttt{width$\geq$2.5}, \texttt{height$\geq$2.5} & Minimum size applied & \texttt{width=19.3}, \texttt{height=19.3} ($\geq$2.5) & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-PF-05 & Verify bathroom minimum size (1.5\,$\times$\,1.5\,m) enforced & plot\_fitter imported & Call with 0.1\,$\times$\,0.1 bathroom on large plot & \texttt{\{type:"bathroom", width:0.1, height:0.1\}}, plot 20\,$\times$\,20\,m & \texttt{width$\geq$1.5}, \texttt{height$\geq$1.5} & Minimum size applied & \texttt{width=19.3}, \texttt{height=19.3} ($\geq$1.5) & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-PF-06 & Verify MARGIN offset (0.35\,m) applied to all rooms & plot\_fitter imported & Call with single room; check \texttt{x, y $\geq$ 0.35} & \texttt{\{x:0, y:0, width:4, height:3\}}, plot 10\,$\times$\,8\,m & \texttt{x $\geq$ 0.35}, \texttt{y $\geq$ 0.35} & Rooms offset from plot edge & \texttt{x=0.35}, \texttt{y=0.35} & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-PF-07 & Verify area field updated after fitting & plot\_fitter imported & Call with room containing area field & \texttt{\{width:5, height:4, area:20.0, type:"living"\}} & \texttt{area $\approx$ new\_width $\times$ new\_height} & Area field recalculated & \texttt{area = width $\times$ height} (verified) & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-PF-08 & Verify push-apart resolves overlapping rooms (mode-collapse scenario) & plot\_fitter imported; Steps 3.5 and 3.6 added after initial failure & Call with 3 fully coincident identical rooms; check no overlaps remain & 3 rooms at (0,0) each 5\,$\times$\,5\,m, plot 15\,$\times$\,12\,m & No rooms overlap after fitting & Rooms placed in grid arrangement & Rooms at (0.35,0.35), (6.03,0.35), (0.35,6.03); no overlaps & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-PF-09 & Verify non-geometry keys preserved after fitting & plot\_fitter imported & Call with room containing extra fields & \texttt{\{type:"kitchen", name:"Kitchen", x:2, y:3, w:4, h:3\}} & \texttt{type} and \texttt{name} keys preserved & Extra keys intact & \texttt{type="kitchen"}, \texttt{name="Kitchen"} preserved & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-PF-10 & Verify no crash on 1\,$\times$\,1\,m plot (minimum size) & plot\_fitter imported & Call with any room on 1\,$\times$\,1\,m plot & \texttt{\{type:"bedroom", width:3, height:3\}}, plot 1\,$\times$\,1\,m & Returns without raising exception & Result returned (clamped rooms) & No exception raised & Pass \\ \hline
+
+\end{longtable}
+\end{landscape}
+
+% ----------------------------------------------------------
+\subsection{Module 4: Request/Response Schemas}
+\texttt{backend/models/schemas.py} — 10 test cases, 10 passed
+% ----------------------------------------------------------
+
+\begin{landscape}
+\small
+\begin{longtable}{|p{1.4cm}|p{3.2cm}|p{2.8cm}|p{2.8cm}|p{2.8cm}|p{2.8cm}|p{2.6cm}|p{2.8cm}|p{1.0cm}|}
+\caption{Unit Test Results — Request/Response Schemas} \label{tab:sch} \\
+\hline
+\rowcolor{tableheader}
+\textcolor{white}{\textbf{TC ID}} &
+\textcolor{white}{\textbf{Test Objective}} &
+\textcolor{white}{\textbf{Precondition}} &
+\textcolor{white}{\textbf{Steps}} &
+\textcolor{white}{\textbf{Test Data}} &
+\textcolor{white}{\textbf{Expected Result}} &
+\textcolor{white}{\textbf{Post-condition}} &
+\textcolor{white}{\textbf{Actual Result}} &
+\textcolor{white}{\textbf{Pass/ Fail}} \\
+\hline
+\endfirsthead
+\hline
+\rowcolor{tableheader}
+\textcolor{white}{\textbf{TC ID}} &
+\textcolor{white}{\textbf{Test Objective}} &
+\textcolor{white}{\textbf{Precondition}} &
+\textcolor{white}{\textbf{Steps}} &
+\textcolor{white}{\textbf{Test Data}} &
+\textcolor{white}{\textbf{Expected Result}} &
+\textcolor{white}{\textbf{Post-condition}} &
+\textcolor{white}{\textbf{Actual Result}} &
+\textcolor{white}{\textbf{Pass/ Fail}} \\
+\hline
+\endhead
+
+\rowcolor{passgreen}
+TC-SCH-01 & Verify valid GenerateRequest is accepted & Pydantic and schemas imported & Instantiate \texttt{GenerateRequest} with valid text & \texttt{text="3 bedroom house"} & Object created without ValidationError & Request object ready for use & Object created successfully & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-SCH-02 & Verify empty text creates object (validated at route layer) & Schemas imported & Instantiate with empty string & \texttt{text=""} & Object created; schema does not enforce non-empty; route handler returns 422 & Object created; route will enforce non-empty & Object created & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-SCH-03 & Verify negative \texttt{plot\_width} rejected by schema (\texttt{gt=0}) & Schemas imported & Instantiate with \texttt{plot\_width=-5.0} & \texttt{text="house"}, \texttt{plot\_width=-5.0} & \texttt{ValidationError} raised & Request rejected before pipeline runs & \texttt{ValidationError} raised & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-SCH-04 & Verify zero \texttt{plot\_width} rejected by schema (\texttt{gt=0}) & Schemas imported & Instantiate with \texttt{plot\_width=0.0} & \texttt{text="house"}, \texttt{plot\_width=0.0} & \texttt{ValidationError} raised & Request rejected & \texttt{ValidationError} raised & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-SCH-05 & Verify optional fields default to None & Schemas imported & Instantiate with text only & \texttt{text="house"} & All optional fields are \texttt{None} & Defaults applied & All optional fields \texttt{None} & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-SCH-06 & Verify JobStatus enum values are correct & Schemas imported & Access all four enum members & — & \texttt{pending}, \texttt{processing}, \texttt{done}, \texttt{failed} & Four valid statuses defined & All four values correct & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-SCH-07 & Verify StatusResponse \texttt{progress} defaults to 0 & Schemas imported & Instantiate \texttt{StatusResponse} without \texttt{progress} & \texttt{job\_id="abc"}, \texttt{status=PENDING}, \texttt{message="waiting"} & \texttt{progress = 0} & Default progress applied & \texttt{progress = 0} & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-SCH-08 & Verify StatusResponse \texttt{ifc\_ready} defaults to False & Schemas imported & Instantiate without \texttt{ifc\_ready} & Same as TC-SCH-07 & \texttt{ifc\_ready = False} & IFC not prematurely flagged & \texttt{ifc\_ready = False} & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-SCH-09 & Verify GenerateResponse serialises to dict & Schemas imported & Call \texttt{.model\_dump()} on GenerateResponse & \texttt{job\_id="xyz-123"}, \texttt{status=PENDING} & \texttt{dict["job\_id"]="xyz-123"}, \texttt{dict["status"]="pending"} & Response ready for JSON serialisation & Correct dict returned & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-SCH-10 & Verify negative \texttt{plot\_height} rejected (\texttt{gt=0}) & Schemas imported & Instantiate with \texttt{plot\_height=-1.0} & \texttt{text="house"}, \texttt{plot\_height=-1.0} & \texttt{ValidationError} raised & Request rejected & \texttt{ValidationError} raised & Pass \\ \hline
+
+\end{longtable}
+\end{landscape}
+
+% ----------------------------------------------------------
+\subsection{Module 5: Job Manager}
+\texttt{backend/core/job\_manager.py} — 7 test cases, 7 passed
+% ----------------------------------------------------------
+
+\begin{landscape}
+\small
+\begin{longtable}{|p{1.4cm}|p{3.2cm}|p{2.8cm}|p{2.8cm}|p{2.8cm}|p{2.8cm}|p{2.6cm}|p{2.8cm}|p{1.0cm}|}
+\caption{Unit Test Results — Job Manager} \label{tab:jm} \\
+\hline
+\rowcolor{tableheader}
+\textcolor{white}{\textbf{TC ID}} &
+\textcolor{white}{\textbf{Test Objective}} &
+\textcolor{white}{\textbf{Precondition}} &
+\textcolor{white}{\textbf{Steps}} &
+\textcolor{white}{\textbf{Test Data}} &
+\textcolor{white}{\textbf{Expected Result}} &
+\textcolor{white}{\textbf{Post-condition}} &
+\textcolor{white}{\textbf{Actual Result}} &
+\textcolor{white}{\textbf{Pass/ Fail}} \\
+\hline
+\endfirsthead
+\hline
+\rowcolor{tableheader}
+\textcolor{white}{\textbf{TC ID}} &
+\textcolor{white}{\textbf{Test Objective}} &
+\textcolor{white}{\textbf{Precondition}} &
+\textcolor{white}{\textbf{Steps}} &
+\textcolor{white}{\textbf{Test Data}} &
+\textcolor{white}{\textbf{Expected Result}} &
+\textcolor{white}{\textbf{Post-condition}} &
+\textcolor{white}{\textbf{Actual Result}} &
+\textcolor{white}{\textbf{Pass/ Fail}} \\
+\hline
+\endhead
+
+\rowcolor{passgreen}
+TC-JM-01 & Verify \texttt{create\_job} returns unique IDs per call & job\_manager imported & Create two jobs and compare IDs & \texttt{"house prompt"}, \texttt{"another prompt"} & Two different UUID strings & Both jobs registered with distinct IDs & IDs differ (two distinct UUID4 strings) & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-JM-02 & Verify new job initial status is PENDING & job\_manager imported & Create job and check status field & \texttt{"house prompt"} & \texttt{status == JobStatus.PENDING} & Job awaiting pipeline & \texttt{status = pending} & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-JM-03 & Verify \texttt{get\_job} retrieves correct job by ID & job\_manager imported & Create job; call \texttt{get\_job} with its ID & Job ID from TC-JM-01 & Returns same Job object & Job retrievable by ID & Same object returned & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-JM-04 & Verify \texttt{get\_job} returns None for unknown ID & job\_manager imported & Call \texttt{get\_job} with fabricated ID & \texttt{"nonexistent-id-xyz"} & Returns \texttt{None} & No exception; graceful miss & \texttt{None} returned & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-JM-05 & Verify job stores original prompt text & job\_manager imported & Create job; read \texttt{text} field & \texttt{"house prompt"} & \texttt{job.text == "house prompt"} & Prompt preserved for pipeline & \texttt{text = "house prompt"} & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-JM-06 & Verify initial job progress is 0 & job\_manager imported & Create job; read \texttt{progress} field & Any text & \texttt{job.progress == 0} & Progress starts at zero & \texttt{progress = 0} & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-JM-07 & Verify job ID is a valid UUID4 format & job\_manager imported & Create job; match ID against UUID4 regex & Any text & ID matches \texttt{\^{}[0-9a-f]\{8\}-...-4...} pattern & UUID4 format guaranteed & UUID4 pattern matched & Pass \\ \hline
+
+\end{longtable}
+\end{landscape}
+
+% ----------------------------------------------------------
+\subsection{Module 6: Plot Unit Converter}
+\texttt{frontend/src/lib/plotUnits.ts} (logic verified via Python equivalent) — 7 test cases, 7 passed
+% ----------------------------------------------------------
+
+\begin{landscape}
+\small
+\begin{longtable}{|p{1.4cm}|p{3.2cm}|p{2.8cm}|p{2.8cm}|p{2.8cm}|p{2.8cm}|p{2.6cm}|p{2.8cm}|p{1.0cm}|}
+\caption{Unit Test Results — Plot Unit Converter} \label{tab:pu} \\
+\hline
+\rowcolor{tableheader}
+\textcolor{white}{\textbf{TC ID}} &
+\textcolor{white}{\textbf{Test Objective}} &
+\textcolor{white}{\textbf{Precondition}} &
+\textcolor{white}{\textbf{Steps}} &
+\textcolor{white}{\textbf{Test Data}} &
+\textcolor{white}{\textbf{Expected Result}} &
+\textcolor{white}{\textbf{Post-condition}} &
+\textcolor{white}{\textbf{Actual Result}} &
+\textcolor{white}{\textbf{Pass/ Fail}} \\
+\hline
+\endfirsthead
+\hline
+\rowcolor{tableheader}
+\textcolor{white}{\textbf{TC ID}} &
+\textcolor{white}{\textbf{Test Objective}} &
+\textcolor{white}{\textbf{Precondition}} &
+\textcolor{white}{\textbf{Steps}} &
+\textcolor{white}{\textbf{Test Data}} &
+\textcolor{white}{\textbf{Expected Result}} &
+\textcolor{white}{\textbf{Post-condition}} &
+\textcolor{white}{\textbf{Actual Result}} &
+\textcolor{white}{\textbf{Pass/ Fail}} \\
+\hline
+\endhead
+
+\rowcolor{passgreen}
+TC-PU-01 & Verify 5 marla converts to correct area ($\approx$126.46\,m²) & Conversion constants loaded (1 marla\,=\,25.2929\,m²) & Convert 5 marla to PlotDims & \texttt{unit="marla"}, \texttt{v1=5} & \texttt{width $\times$ height $\approx$ 126.46\,m²} & Dimensions correct for 5 marla plot & Area\,=\,126.45\,m² ($\checkmark$) & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-PU-02 & Verify 1 kanal converts to correct area ($\approx$505.86\,m²) & Conversion constants loaded (1 kanal\,=\,505.857\,m²) & Convert 1 kanal to PlotDims & \texttt{unit="kanal"}, \texttt{v1=1} & \texttt{width $\times$ height $\approx$ 505.86\,m²} & Dimensions correct for 1 kanal plot & Area\,$\approx$\,505.8\,m² ($\checkmark$) & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-PU-03 & Verify m\,$\times$\,m passes dimensions directly & Conversion constants loaded & Convert m\,$\times$\,m to PlotDims & \texttt{unit="mxm"}, \texttt{v1=10}, \texttt{v2=8} & \texttt{\{width:10.0, height:8.0\}} & Exact dimensions preserved & \texttt{\{width:10.0, height:8.0\}} & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-PU-04 & Verify ft\,$\times$\,ft converts to metres & Conversion constants loaded (1\,ft\,=\,0.3048\,m) & Convert 30\,$\times$\,25\,ft to metres & \texttt{unit="ftxft"}, \texttt{v1=30}, \texttt{v2=25} & \texttt{width$\approx$9.14\,m}, \texttt{height$\approx$7.62\,m} & Dimensions in metres & \texttt{\{width:9.14, height:7.62\}} & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-PU-05 & Verify sqm converts to correct plot dimensions & Conversion constants loaded & Convert 150\,m² to PlotDims & \texttt{unit="sqm"}, \texttt{v1=150} & \texttt{width $\times$ height $\approx$ 150\,m²} & Area preserved & Area\,=\,149.99\,m² ($\checkmark$) & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-PU-06 & Verify aspect ratio 1.8 applied for area-based units & Conversion constants loaded & Convert any area unit; check w/h ratio & \texttt{unit="sqm"}, \texttt{v1=200} & \texttt{width/height $\approx$ 1.8} & Layout shape correct & \texttt{w/h\,=\,1.80} & Pass \\ \hline
+
+\rowcolor{passgreen}
+TC-PU-07 & Verify unknown unit returns None & Conversion constants loaded & Pass unsupported unit string & \texttt{unit="acre"}, \texttt{v1=1} & Returns \texttt{None} & Graceful rejection with no crash & \texttt{None} returned & Pass \\ \hline
+
+\end{longtable}
+\end{landscape}
+
+% ----------------------------------------------------------
+\subsection{Test Summary}
+% ----------------------------------------------------------
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{|l|c|c|c|}
+\hline
+\rowcolor{tableheader}
+\textcolor{white}{\textbf{Module}} & \textcolor{white}{\textbf{Tests Run}} & \textcolor{white}{\textbf{Passed}} & \textcolor{white}{\textbf{Failed}} \\
+\hline
+NLP Adapter (\texttt{nlp\_adapter.py})         & 12 & 12 & 0 \\
+\hline
+Spec Converter (\texttt{spec\_converter.py})   & 10 & 10 & 0 \\
+\hline
+Plot Constraint Fitter (\texttt{plot\_fitter.py}) & 10 & 10 & 0 \\
+\hline
+Request/Response Schemas (\texttt{schemas.py}) & 10 & 10 & 0 \\
+\hline
+Job Manager (\texttt{job\_manager.py})         &  7 &  7 & 0 \\
+\hline
+Plot Unit Converter (\texttt{plotUnits.ts})    &  7 &  7 & 0 \\
+\hline
+\rowcolor{tableheader}
+\textcolor{white}{\textbf{Total}} & \textcolor{white}{\textbf{56}} & \textcolor{white}{\textbf{56}} & \textcolor{white}{\textbf{0}} \\
+\hline
+\end{tabular}
+\caption{Unit Test Summary — All Modules}
+\label{tab:summary}
+\end{table}

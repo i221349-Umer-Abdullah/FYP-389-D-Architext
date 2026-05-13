@@ -17,6 +17,13 @@
     0 0 0 1px rgba(10, 10, 10, 0.18);
 }
 
+/* Multiline (textarea) variant — rectangular pill, aligned to top */
+.shellMultiline {
+  border-radius: 20px;
+  align-items: flex-end;
+  padding: 12px;
+}
+
 .label {
   position: absolute;
   width: 1px;
@@ -43,6 +50,22 @@
 
 .input:focus {
   outline: none;
+}
+
+/* Textarea variant */
+.textarea {
+  min-height: 72px;
+  max-height: 260px;
+  resize: none;
+  overflow-y: auto;
+  line-height: 1.55;
+  padding: 6px 14px;
+  align-self: stretch;
+}
+
+.buttonMultiline {
+  align-self: flex-end;
+  border-radius: 12px;
 }
 
 .button {

@@ -2,9 +2,9 @@
 
 import { Suspense, useMemo } from "react";
 import { Canvas } from "@react-three/fiber";
-import { ContactShadows, OrbitControls } from "@react-three/drei";
+import { ContactShadows, Line, OrbitControls } from "@react-three/drei";
 
-import { GenerationRoom, WorkflowState } from "@/lib/types";
+import { GenerationRoom, PlotConstraint, WorkflowState } from "@/lib/types";
 import { getStyle, type StyleId } from "@/lib/architectureStyles";
 import { ParticleBuildLoader } from "@/components/three/ParticleBuildLoader";
 import { RoomFloorPlanModel } from "@/components/three/RoomFloorPlanModel";
@@ -17,22 +17,39 @@ interface GeneratorCanvasProps {
   rooms: GenerationRoom[] | null;
   label: string;
   styleId?: StyleId;
+  plotConstraint?: PlotConstraint | null;
 }
 
-function cameraForRooms(rooms: GenerationRoom[] | null) {
-  if (!rooms?.length) return { position: [10, 9, 10] as [number, number, number], fov: 42 };
+function PlotBoundaryBox({ width, height }: { width: number; height: number }) {
+  const hw = width / 2;
+  const hh = height / 2;
+  const y  = 0.02;
+  const points: [number, number, number][] = [
+    [-hw, y, -hh], [hw, y, -hh], [hw, y, hh], [-hw, y, hh], [-hw, y, -hh],
+  ];
+  return <Line points={points} color="#22c55e" lineWidth={2} />;
+}
+
+function cameraForRooms(rooms: GenerationRoom[] | null, plotConstraint?: PlotConstraint | null) {
+  const plotSpan = plotConstraint ? Math.max(plotConstraint.width, plotConstraint.height) : 0;
+  if (!rooms?.length) {
+    const base = Math.max(plotSpan, 8);
+    const dist = base * 1.1;
+    return { position: [dist, dist * 0.8, dist] as [number, number, number], fov: 42 };
+  }
   const maxX = Math.max(...rooms.map((r) => r.x + r.width));
   const maxY = Math.max(...rooms.map((r) => r.y + r.height));
-  const span = Math.max(maxX, maxY, 8);
+  const span = Math.max(maxX, maxY, plotSpan, 8);
   const dist = span * 1.1;
   return { position: [dist, dist * 0.8, dist] as [number, number, number], fov: 42 };
 }
 
-export function GeneratorCanvas({ state, rooms, label, styleId = "modern" }: GeneratorCanvasProps) {
-  const camera    = useMemo(() => cameraForRooms(rooms), [rooms]);
-  const canvasBg  = useMemo(() => getStyle(styleId).visuals.canvasBg, [styleId]);
-  const showModel = state === "ready" && rooms && rooms.length > 0;
+export function GeneratorCanvas({ state, rooms, label, styleId = "modern", plotConstraint }: GeneratorCanvasProps) {
+  const camera     = useMemo(() => cameraForRooms(rooms, plotConstraint), [rooms, plotConstraint]);
+  const canvasBg   = useMemo(() => getStyle(styleId).visuals.canvasBg, [styleId]);
+  const showModel  = state === "ready" && rooms && rooms.length > 0;
   const showLoader = state === "building";
+  const showBoundary = Boolean(plotConstraint) && (state === "ready" || state === "idle");
 
   return (
     <div className={styles.wrap}>
@@ -55,6 +72,10 @@ export function GeneratorCanvas({ state, rooms, label, styleId = "modern" }: Gen
               <RoomFloorPlanModel rooms={rooms} styleId={styleId} />
               <ContactShadows opacity={0.22} blur={2.5} far={12} width={24} height={24} position={[0, -0.1, 0]} />
             </>
+          )}
+
+          {showBoundary && (
+            <PlotBoundaryBox width={plotConstraint!.width} height={plotConstraint!.height} />
           )}
 
           {(showModel || state === "idle") && (

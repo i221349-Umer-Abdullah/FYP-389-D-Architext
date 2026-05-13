@@ -3,9 +3,7 @@ export type StyleId =
   | "mughal"
   | "mediterranean"
   | "victorian"
-  | "haveli"
-  | "artdeco"
-  | "minimalist";
+  | "haveli";
 
 export type MaterialTier = "budget" | "standard" | "premium";
 
@@ -46,10 +44,12 @@ export interface ArchitectureStyle {
   costFactors: CostFactors;
 }
 
-export const MATERIAL_TIER_MULTIPLIERS: Record<MaterialTier, { label: string; multiplier: number }> = {
-  budget:   { label: "Budget",   multiplier: 0.65 },
-  standard: { label: "Standard", multiplier: 1.00 },
-  premium:  { label: "Premium",  multiplier: 1.55 },
+// highMultiplier: applied to style.costPerSqm.high to get the tier's ceiling price
+// lowRatio: low = high × lowRatio  (controls how tight the range is)
+export const MATERIAL_TIER_MULTIPLIERS: Record<MaterialTier, { label: string; highMultiplier: number; lowRatio: number }> = {
+  budget:   { label: "Budget",   highMultiplier: 1.00, lowRatio: 0.58 },
+  standard: { label: "Standard", highMultiplier: 1.95, lowRatio: 0.63 },
+  premium:  { label: "Premium",  highMultiplier: 3.20, lowRatio: 0.69 },
 };
 
 export const ARCHITECTURE_STYLES: ArchitectureStyle[] = [
@@ -113,30 +113,6 @@ export const ARCHITECTURE_STYLES: ArchitectureStyle[] = [
     costPerSqm: { low: 22_000, high: 45_000 },
     costFactors: { foundation: 0.13, structure: 0.25, electrical: 0.07, plumbing: 0.09, hvac: 0.05, finishes: 0.26, roofing: 0.10, misc: 0.05 },
   },
-  {
-    id: "artdeco",
-    label: "Art Deco",
-    description: "Bold geometry, stepped facades, metallic accents",
-    visuals: {
-      wallColor: "#F0EBE0", slabColor: "#1A1610", edgeColor: "#C8A84A",
-      wallRoughness: 0.30, wallMetalness: 0.12, slabRoughness: 0.50,
-      wallThickness: 0.15, ceilingHeight: 3.1, canvasBg: "#F8F4EE",
-    },
-    costPerSqm: { low: 42_000, high: 82_000 },
-    costFactors: { foundation: 0.11, structure: 0.21, electrical: 0.09, plumbing: 0.09, hvac: 0.07, finishes: 0.30, roofing: 0.08, misc: 0.05 },
-  },
-  {
-    id: "minimalist",
-    label: "Minimalist",
-    description: "Less is more — pure form, neutral palette, clean geometry",
-    visuals: {
-      wallColor: "#FFFFFF", slabColor: "#D0D0D0", edgeColor: "#E2E2E2",
-      wallRoughness: 0.10, wallMetalness: 0.10, slabRoughness: 0.45,
-      wallThickness: 0.08, ceilingHeight: 2.9, canvasBg: "#FAFAFA",
-    },
-    costPerSqm: { low: 38_000, high: 72_000 },
-    costFactors: { foundation: 0.11, structure: 0.20, electrical: 0.09, plumbing: 0.09, hvac: 0.08, finishes: 0.28, roofing: 0.08, misc: 0.07 },
-  },
 ];
 
 export const DEFAULT_STYLE_ID: StyleId = "modern";
@@ -189,12 +165,12 @@ export function computeCostBreakdown(
   styleId: StyleId,
   tier: MaterialTier,
 ): CostBreakdown {
-  const style   = getStyle(styleId);
-  const tierMul = MATERIAL_TIER_MULTIPLIERS[tier].multiplier;
-  const area    = rooms.reduce((s, r) => s + r.area_m2, 0);
+  const style    = getStyle(styleId);
+  const tierInfo = MATERIAL_TIER_MULTIPLIERS[tier];
+  const area     = rooms.reduce((s, r) => s + r.area_m2, 0);
 
-  const baseLow  = area * style.costPerSqm.low  * tierMul;
-  const baseHigh = area * style.costPerSqm.high * tierMul;
+  const baseHigh = area * style.costPerSqm.high * tierInfo.highMultiplier;
+  const baseLow  = baseHigh * tierInfo.lowRatio;
 
   // Build category breakdown
   const f = style.costFactors;
@@ -232,8 +208,8 @@ export function computeCostBreakdown(
     totalLow:      Math.round(baseLow),
     totalHigh:     Math.round(baseHigh),
     totalAreaM2:   area,
-    costPerSqmLow:  Math.round(style.costPerSqm.low  * tierMul),
-    costPerSqmHigh: Math.round(style.costPerSqm.high * tierMul),
+    costPerSqmHigh: Math.round(style.costPerSqm.high * tierInfo.highMultiplier),
+    costPerSqmLow:  Math.round(style.costPerSqm.high * tierInfo.highMultiplier * tierInfo.lowRatio),
     styleLabel: style.label,
     tierLabel:  MATERIAL_TIER_MULTIPLIERS[tier].label,
     categories,
