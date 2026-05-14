@@ -8,7 +8,6 @@ namespace Architext.Revit
     {
         private TextBox _backendBox;
         private TextBox _promptBox;
-        private ComboBox _modeBox;
 
         public string BackendUrl
         {
@@ -24,7 +23,7 @@ namespace Architext.Revit
         {
             get
             {
-                return _modeBox.SelectedIndex == 1 ? "llm" : "gnn";
+                return "llm";
             }
         }
 
@@ -32,7 +31,7 @@ namespace Architext.Revit
         {
             get
             {
-                return GeneratorMode == "gnn" ? "Primary GNN" : "LLM Baseline";
+                return "LLM Generator";
             }
         }
 
@@ -67,13 +66,11 @@ namespace Architext.Revit
             modeLabel.SetBounds(20, 96, 120, 22);
             Controls.Add(modeLabel);
 
-            _modeBox = new ComboBox();
-            _modeBox.DropDownStyle = ComboBoxStyle.DropDownList;
-            _modeBox.Items.Add("Primary GNN");
-            _modeBox.Items.Add("LLM Baseline");
-            _modeBox.SelectedIndex = 0;
-            _modeBox.SetBounds(150, 94, 220, 24);
-            Controls.Add(_modeBox);
+            Label modeValue = new Label();
+            modeValue.Text = "LLM Generator";
+            modeValue.Font = new Font(Font.FontFamily, 9, FontStyle.Bold);
+            modeValue.SetBounds(150, 96, 220, 22);
+            Controls.Add(modeValue);
 
             Label promptLabel = new Label();
             promptLabel.Text = "Prompt";
@@ -128,4 +125,3 @@ namespace Architext.Revit
         }
     }
 }
-

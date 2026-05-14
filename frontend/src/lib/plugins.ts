@@ -19,10 +19,10 @@ export const PLUGINS: PluginInfo[] = [
     summary:
       "Send Architext floor-plan output into Revit and prepare model data for BIM workflows.",
     description:
-      "The Revit plugin is the desktop bridge between generated Architext layouts and native Revit model authoring. It calls the local FastAPI backend, generates a Primary GNN or LLM baseline floor plan, downloads the IFC output, and imports or opens it in Autodesk Revit.",
+      "The Revit plugin is the desktop bridge between generated Architext layouts and native Revit model authoring. It calls the local FastAPI backend, generates an LLM floor plan, downloads the IFC output, and imports or opens it in Autodesk Revit.",
     details: [
       "Generate a floor plan from a prompt directly inside Revit.",
-      "Defaults to the Primary GNN generator with an LLM Baseline option for comparison.",
+      "Uses the LLM generator for prompt-to-IFC generation inside Revit.",
       "Downloads the generated IFC and imports or opens it in Revit for BIM review.",
       "Requires the Architext backend running locally at localhost:8000.",
     ],

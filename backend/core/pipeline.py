@@ -79,8 +79,9 @@ def _extract_plot_from_text(text: str):
     return None, None
 
 
-# Shared GNN instance
-_gnn = get_real_gnn()
+# Shared GNN instance, loaded lazily so LLM-only workflows can run without
+# requiring local GNN checkpoint files at backend startup.
+_gnn = None
 
 
 def _validate_and_fix(room_graph: dict, spec: dict) -> dict:
@@ -465,6 +466,10 @@ async def run_pipeline(job: Job, project_name: Optional[str] = None,
 
         else:
             # ── GNN path: T5 NLP (Layer 1) + StructuralGNN (Layer 2) ──────────
+            global _gnn
+            if _gnn is None:
+                _gnn = get_real_gnn()
+
             job.update(JobStatus.PROCESSING, "Layer 1: Parsing natural language...", 10)
             await asyncio.sleep(0)
 

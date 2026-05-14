@@ -8,5 +8,5 @@ Workflow:
 - Click the ArchiText ribbon button in Revit.
 - Enter a natural language prompt.
 - Generate through the local FastAPI backend.
-- Default generator is Primary GNN; LLM Baseline is available for comparison.
+- The add-in uses the LLM generator for prompt-to-IFC generation inside Revit.
 - Download and import/open the generated IFC in Revit.

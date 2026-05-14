@@ -21,7 +21,7 @@ namespace Architext.Revit
             {
                 TaskDialog.Show(
                     "ArchiText",
-                    "Generating floor plan with " + form.GeneratorDisplayName + ".\n\nThis may take a few seconds.");
+                    "Generating floor plan with the LLM generator.\n\nThis may take a few seconds.");
 
                 ArchitextClient client = new ArchitextClient(form.BackendUrl);
                 string jobId = client.StartGeneration(form.Prompt, form.GeneratorMode);
@@ -56,4 +56,3 @@ namespace Architext.Revit
         }
     }
 }
-
